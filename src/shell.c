@@ -26,14 +26,11 @@ void exec_cmd(char **cmd) {
 
 
 int main() {
-    char *pwd;
-    char *login = getenv("USER");
-    Cmdline *cmd;
+    Cmdline *cmd = NULL;
 
     while (1) {
-        pwd = getenv("PWD");
         // Afficher un beau prompt
-        printf("%s%s%s:%s%s%s$ ", GREEN, login, RESET, BLUE, pwd, RESET);
+        printf("%s%s%s:%s%s%s$ ", GREEN, getenv("USER"), RESET, BLUE, getenv("PWD"), RESET);
 
         cmd = readcmd();
 
@@ -45,7 +42,7 @@ int main() {
 
         // Syntax error, read another command
         if (cmd->err) {
-            printf("error: %s\n", cmd->err);
+            fprintf(stderr, "synthax error: %s\n", cmd->err);
             continue;
         }
 
@@ -53,15 +50,16 @@ int main() {
         if (!cmd->seq[0])
             continue;
 
-        // Execute internal command if any
-        check_internal_commands(cmd);
+        // Execute internal command and continue if any
+        if (check_internal_commands(cmd->seq[0]) == 1)
+            continue;
 
         int pid;
         if ((pid = Fork()) == 0) {
             // Child
             // Execute the command and check that it exists
             if (execvp(cmd->seq[0][0], cmd->seq[0]) == -1) {
-                fprintf(stdout, "%s: command not found\n", cmd->seq[0][0]);
+                perror(cmd->seq[0][0]);
                 exit(EXIT_FAILURE);
             }
         }

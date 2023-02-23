@@ -53,18 +53,19 @@ int main() {
         if (!cmd->seq[0])
             continue;
 
-				
         // Execute internal command if any
         check_internal_commands(cmd);
 
-
-		int pid;
-		if ((pid = Fork()) == 0) { //Fils
-			execvp(cmd->seq[0][0], cmd->seq[0]);
-			fprintf(stdout, "%s: command not found\n", cmd->seq[0][0]);
-			exit(EXIT_FAILURE);
-		}
-		//Père
-		Waitpid(pid, NULL, 0);
+        int pid;
+        if ((pid = Fork()) == 0) {
+            // Child
+            // Execute the command and check that it exists
+            if (execvp(cmd->seq[0][0], cmd->seq[0]) == -1) {
+                fprintf(stdout, "%s: command not found\n", cmd->seq[0][0]);
+                exit(EXIT_FAILURE);
+            }
+        }
+        // Parent
+        Waitpid(pid, NULL, 0);
     }
 }

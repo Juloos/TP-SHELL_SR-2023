@@ -10,14 +10,14 @@
 #include "csapp.h"
 
 // La vie est plus belle avec des couleurs
-#define BLACK "\e[0;30m"
-#define RED "\e[0;31m"
-#define GREEN "\e[0;32m"
-#define YELLOW "\e[0;33m"
-#define BLUE "\e[0;34m"
-#define MAGENTA "\e[0;35m"
-#define CYAN "\e[0;36m"
-#define WHITE "\e[0;37m"
+#define BLACK "\e[1;30m"
+#define RED "\e[1;31m"
+#define GREEN "\e[1;32m"
+#define YELLOW "\e[1;33m"
+#define BLUE "\e[1;34m"
+#define MAGENTA "\e[1;35m"
+#define CYAN "\e[1;36m"
+#define WHITE "\e[1;37m"
 #define RESET "\e[0m"
 
 
@@ -30,7 +30,7 @@ int main() {
 
     while (1) {
         // Afficher un beau prompt
-        printf("%s%s%s:%s%s%s$ ", GREEN, getenv("USER"), RESET, BLUE, getenv("PWD"), RESET);
+        printf("%s%s@localhost%s:%s%s%s$ ", GREEN, getenv("USER"), RESET, BLUE, getenv("PWD"), RESET);
 
         cmd = readcmd();
 

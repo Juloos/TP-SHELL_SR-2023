@@ -56,30 +56,55 @@ int main() {
         // Execute internal command if any
         check_internal_commands(cmd);
 
-        int pid;
-        if ((pid = Fork()) == 0) {
-            // Child
+		int tube[2];
+		pipe(tube);
 
-			// Input Redirect
-			if (cmd->in != NULL) {
-				int fd = Open(cmd->in, O_RDONLY, 0);
-				Dup2(fd, 0);
+		int nb_commands = 0;
+		while (cmd->seq[nb_commands] != NULL) {
+			nb_commands++;
+		}
+		
+        int pid[nb_commands];
+		for (int i = 0; i < nb_commands; i++) {
+			if ((pid[i] = Fork()) == 0) {
+				// Child
+
+				// Input Redirect if first command
+				if ((cmd->in != NULL) && (i == 0)) {
+					int fd = Open(cmd->in, O_RDONLY, 0);
+					Dup2(fd, 0);
+				}
+
+				// Output Redirect if last command
+				if ((cmd->out != NULL) && (i == nb_commands - 1)) {
+					int fd = Open(cmd->out, O_CREAT | O_WRONLY, 0);
+					Dup2(fd, 1);
+				}
+				
+				if (nb_commands > 1) {
+					if (i == 0) {
+						Close(tube[0]);
+						Dup2(tube[1], 1);
+					}
+					else {
+						Close(tube[1]);
+						Dup2(tube[0], 0);
+					}
+				}
+
+
+				// Execute the command and check that it exists
+				if (execvp(cmd->seq[i][0], cmd->seq[i]) == -1) {
+					perror(cmd->seq[i][0]);
+					exit(EXIT_FAILURE);
+				}
 			}
-
-			// Output Redirect
-			if (cmd->out != NULL) {
-				int fd = Open(cmd->out, O_CREAT | O_WRONLY, 0);
-				Dup2(fd, 1);
-			}
-
-
-            // Execute the command and check that it exists
-            if (execvp(cmd->seq[0][0], cmd->seq[0]) == -1) {
-                perror(cmd->seq[0][0]);
-                exit(EXIT_FAILURE);
-            }
-        }
+		}
         // Parent
-        Waitpid(pid, NULL, 0);
+		Close(tube[0]);
+		Close(tube[1]);
+		for (int i = 0; i < nb_commands; i++) {
+        	Waitpid(pid[i], NULL, 0);
+		}
     }
 }

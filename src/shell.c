@@ -5,47 +5,54 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "readcmd.h"
+#include "shell_commands.h"
 #include "csapp.h"
 
-typedef struct cmdline Cmdline;
+// La vie est plus belle avec des couleurs
+#define BLACK "\e[0;30m"
+#define RED "\e[0;31m"
+#define GREEN "\e[0;32m"
+#define YELLOW "\e[0;33m"
+#define BLUE "\e[0;34m"
+#define MAGENTA "\e[0;35m"
+#define CYAN "\e[0;36m"
+#define WHITE "\e[0;37m"
+#define RESET "\e[0m"
+
+
+void exec_cmd(char **cmd) {
+}
 
 
 int main() {
+    char *pwd;
+    char *login = getenv("USER");
+    Cmdline *cmd;
+
     while (1) {
-        Cmdline *l;
-        int i, j;
+        pwd = getenv("PWD");
+        // Afficher un beau prompt
+        printf("%s%s%s:%s%s%s$ ", GREEN, login, RESET, BLUE, pwd, RESET);
 
-        printf("shell> ");
-        l = readcmd();
+        cmd = readcmd();
 
-        /* If input stream closed, normal termination */
-        if (!l) {
-            printf("exit\n");
+        // If input stream closed, normal termination
+        if (!cmd) {
+            printf("\n");
             exit(0);
         }
 
-        if (l->err) {
-            /* Syntax error, read another command */
-            printf("error: %s\n", l->err);
+        // Syntax error, read another command
+        if (cmd->err) {
+            printf("error: %s\n", cmd->err);
             continue;
         }
 
-		if (l->in) printf("in: %s\n", l->in);
-		if (l->out) printf("out: %s\n", l->out);
+        // Empty command
+        if (!cmd->seq[0])
+            continue;
 
-		if (l->seq[0] != NULL && strcmp(l->seq[0][0], "quit") == 0){
-			printf("exit\n");
-			exit(EXIT_SUCCESS);
-		}
-
-        /* Display each command of the pipe */
-        for (i = 0; l->seq[i] != 0; i++) {
-            char **cmd = l->seq[i];
-            printf("seq[%d]: ", i);
-            for (j = 0; cmd[j] != 0; j++) {
-                printf("%s ", cmd[j]);
-            }
-            printf("\n");
-        }
+        // Execute internal command if any
+        check_internal_commands(cmd);
     }
 }

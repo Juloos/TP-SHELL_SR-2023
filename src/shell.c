@@ -32,6 +32,11 @@ int main()
 		if (l->in) printf("in: %s\n", l->in);
 		if (l->out) printf("out: %s\n", l->out);
 
+		if (l->seq[0] != NULL && strcmp(l->seq[0][0], "quit") == 0){
+			printf("exit\n");
+			exit(EXIT_SUCCESS);
+		}
+
 		/* Display each command of the pipe */
 		for (i=0; l->seq[i]!=0; i++) {
 			char **cmd = l->seq[i];

@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include "readcmd.h"
 #include "csapp.h"
 
@@ -13,7 +14,6 @@ typedef struct cmdline Cmdline;
 int main() {
     while (1) {
         Cmdline *l;
-        int i, j;
 
         printf("shell> ");
         l = readcmd();
@@ -33,19 +33,21 @@ int main() {
 		if (l->in) printf("in: %s\n", l->in);
 		if (l->out) printf("out: %s\n", l->out);
 
-		if (l->seq[0] != NULL && strcmp(l->seq[0][0], "quit") == 0){
+		if (l->seq[0] == NULL) {
+			continue;
+		}
+
+		if (strcmp(l->seq[0][0], "quit") == 0){
 			printf("exit\n");
 			exit(EXIT_SUCCESS);
 		}
-
-        /* Display each command of the pipe */
-        for (i = 0; l->seq[i] != 0; i++) {
-            char **cmd = l->seq[i];
-            printf("seq[%d]: ", i);
-            for (j = 0; cmd[j] != 0; j++) {
-                printf("%s ", cmd[j]);
-            }
-            printf("\n");
-        }
+		int pid;
+		if ((pid = Fork()) == 0) { //Fils
+			execvp(l->seq[0][0], l->seq[0]);
+			fprintf(stdout, "%s: command not found\n", l->seq[0][0]);
+			exit(EXIT_FAILURE);
+		}
+		//Père
+		Waitpid(pid, NULL, 0);
     }
 }

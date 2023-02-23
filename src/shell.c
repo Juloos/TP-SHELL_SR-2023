@@ -59,9 +59,23 @@ int main() {
         int pid;
         if ((pid = Fork()) == 0) {
             // Child
+
+			// Input Redirect
+			if (cmd->in != NULL) {
+				int fd = Open(cmd->in, O_RDONLY, 0);
+				Dup2(fd, 0);
+			}
+
+			// Output Redirect
+			if (cmd->out != NULL) {
+				int fd = Open(cmd->out, O_CREAT | O_WRONLY, 0);
+				Dup2(fd, 1);
+			}
+
+
             // Execute the command and check that it exists
             if (execvp(cmd->seq[0][0], cmd->seq[0]) == -1) {
-                fprintf(stdout, "%s: command not found\n", cmd->seq[0][0]);
+                perror(cmd->seq[0][0]);
                 exit(EXIT_FAILURE);
             }
         }

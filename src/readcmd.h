@@ -17,6 +17,7 @@ struct cmdline {
     char *out;    // If not null : name of file for output redirection.
     char ***seq;  // See comment below
 };
+typedef struct cmdline Cmdline;
 
 /* Field seq of struct cmdline :
 A command line is a sequence of commands whose output is linked to the input

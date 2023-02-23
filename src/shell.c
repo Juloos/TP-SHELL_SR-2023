@@ -6,45 +6,62 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include "readcmd.h"
+#include "shell_commands.h"
 #include "csapp.h"
 
-typedef struct cmdline Cmdline;
+// La vie est plus belle avec des couleurs
+#define BLACK "\e[0;30m"
+#define RED "\e[0;31m"
+#define GREEN "\e[0;32m"
+#define YELLOW "\e[0;33m"
+#define BLUE "\e[0;34m"
+#define MAGENTA "\e[0;35m"
+#define CYAN "\e[0;36m"
+#define WHITE "\e[0;37m"
+#define RESET "\e[0m"
+
+
+void exec_cmd(char **cmd) {
+}
 
 
 int main() {
+    char *pwd;
+    char *login = getenv("USER");
+    Cmdline *cmd;
+
     while (1) {
-        Cmdline *l;
+        pwd = getenv("PWD");
+        // Afficher un beau prompt
+        printf("%s%s%s:%s%s%s$ ", GREEN, login, RESET, BLUE, pwd, RESET);
 
-        printf("shell> ");
-        l = readcmd();
+        cmd = readcmd();
 
-        /* If input stream closed, normal termination */
-        if (!l) {
-            printf("exit\n");
+        // If input stream closed, normal termination
+        if (!cmd) {
+            printf("\n");
             exit(0);
         }
 
-        if (l->err) {
-            /* Syntax error, read another command */
-            printf("error: %s\n", l->err);
+        // Syntax error, read another command
+        if (cmd->err) {
+            printf("error: %s\n", cmd->err);
             continue;
         }
 
-		if (l->in) printf("in: %s\n", l->in);
-		if (l->out) printf("out: %s\n", l->out);
+        // Empty command
+        if (!cmd->seq[0])
+            continue;
 
-		if (l->seq[0] == NULL) {
-			continue;
-		}
+				
+        // Execute internal command if any
+        check_internal_commands(cmd);
 
-		if (strcmp(l->seq[0][0], "quit") == 0){
-			printf("exit\n");
-			exit(EXIT_SUCCESS);
-		}
+
 		int pid;
 		if ((pid = Fork()) == 0) { //Fils
-			execvp(l->seq[0][0], l->seq[0]);
-			fprintf(stdout, "%s: command not found\n", l->seq[0][0]);
+			execvp(cmd->seq[0][0], cmd->seq[0]);
+			fprintf(stdout, "%s: command not found\n", cmd->seq[0][0]);
 			exit(EXIT_FAILURE);
 		}
 		//Père

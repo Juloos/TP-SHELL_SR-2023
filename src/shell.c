@@ -28,9 +28,13 @@ void exec_cmd(char **cmd) {
 int main() {
     Cmdline *cmd = NULL;
 
+    char * hostname = getenv("HOSTNAME");
+    if (hostname == NULL)
+        hostname = "localhost";
+
     while (1) {
         // Afficher un beau prompt
-        printf("%s%s@localhost%s:%s%s%s$ ", GREEN, getenv("USER"), RESET, BLUE, getenv("PWD"), RESET);
+        printf("%s%s@%s%s:%s%s%s$ ", GREEN, getenv("USER"), hostname, RESET, BLUE, getenv("PWD"), RESET);
 
         cmd = readcmd();
 

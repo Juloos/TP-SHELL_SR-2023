@@ -26,9 +26,9 @@ void exec_cmd(char **cmd) {
 
 
 int main() {
-    Cmdline *cmd = NULL;
+    Cmdline *cmd;
 
-    char hostname[256];  // 256 is the max length of a hostname
+    char hostname[256];  // 255 is the max length of a hostname
     gethostname(hostname, 256);
 
     while (1) {

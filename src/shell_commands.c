@@ -15,16 +15,14 @@ void cmd_exit(int argc, char *args[]) {
 }
 
 void cmd_cd(int argc, char *args[]) {
-    if (argc > 2) {
+    if (argc > 2)
         fprintf(stderr, "%s: too many arguments\n", args[0]);
-        return;
-    }
+
     // If no arg, go to home and check for chdir error. Otherwise go to given destination and check for chdir error
-    else if ((argc == 1 && chdir(getenv("HOME")) == -1) || chdir(args[1]) == -1) {
+    else if ((argc == 1 && chdir(getenv("HOME")) == -1) || chdir(args[1]) == -1)
         perror(args[0]);
-        return;
-    }
-    // Update PWD env variable if everything went well
+
+    // Update PWD env variable
     char *pwd = getcwd(NULL, 0);
     setenv("PWD", pwd, 1);
     free(pwd);

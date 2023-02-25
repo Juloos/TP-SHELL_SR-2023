@@ -19,6 +19,8 @@ struct cmdline {
 };
 typedef struct cmdline Cmdline;
 
+void freecmd(struct cmdline *s);
+
 /* Field seq of struct cmdline :
 A command line is a sequence of commands whose output is linked to the input
 of the next command by a pipe. To describe such a structure :

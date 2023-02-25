@@ -26,7 +26,7 @@ void exec_cmd(char **cmd) {
 
 
 int main() {
-    Cmdline *cmd;
+    Cmdline *l;
 
     char hostname[256];  // 255 is the max length of a hostname
     gethostname(hostname, 256);
@@ -35,55 +35,55 @@ int main() {
         // Afficher un beau prompt
         printf("%s%s@%s%s:%s%s%s$ ", GREEN, getenv("USER"), hostname, RESET, BLUE, getenv("PWD"), RESET);
 
-        cmd = readcmd();
+        l = readcmd();
 
         // If input stream closed, normal termination
-        if (!cmd) {
+        if (!l) {
             printf("\n");
-            exit(0);
+            exit(0);  // No need to free l before exit, readcmd() already did it
         }
 
         // Syntax error, read another command
-        if (cmd->err) {
-            fprintf(stderr, "synthax error: %s\n", cmd->err);
+        if (l->err) {
+            fprintf(stderr, "synthax error: %s\n", l->err);
             continue;
         }
 
         // Empty command
-        if (!cmd->seq[0])
+        if (!l->seq[0])
             continue;
 
         // Execute internal command and continue if any
-        if (check_internal_commands(cmd->seq[0]) == 1)
+        if (check_internal_commands(l, 0) == 1)
             continue;
 
 
         int tube[2];
         pipe(tube);
 
-        int nb_commands = 0;
-        while (cmd->seq[nb_commands] != NULL)
-            nb_commands++;
+        int argc = 0;
+        while (l->seq[argc] != NULL)
+            argc++;
 
-        int pid[nb_commands];
-        for (int i = 0; i < nb_commands; i++) {
+        int pid[argc];
+        for (int i = 0; i < argc; i++) {
             if ((pid[i] = Fork()) == 0) {
                 // Child
 
                 // Input Redirect if first command
-                if ((cmd->in != NULL) && (i == 0)) {
-                    int fd = Open(cmd->in, O_RDONLY, 0);
+                if ((l->in != NULL) && (i == 0)) {
+                    int fd = Open(l->in, O_RDONLY, 0);
                     Dup2(fd, 0);
                 }
 
                 // Output Redirect if last command
-                if ((cmd->out != NULL) && (i == nb_commands - 1)) {
-                    int fd = Open(cmd->out, O_CREAT | O_WRONLY, 0);
+                if ((l->out != NULL) && (i == argc - 1)) {
+                    int fd = Open(l->out, O_CREAT | O_WRONLY, 0);
                     Dup2(fd, 1);
                 }
 
                 // Todo: comment that
-                if (nb_commands > 1) {
+                if (argc > 1) {
                     if (i == 0) {
                         Close(tube[0]);
                         Dup2(tube[1], 1);
@@ -94,8 +94,10 @@ int main() {
                 }
 
                 // Execute the command and check that it exists
-                if (execvp(cmd->seq[i][0], cmd->seq[i]) == -1) {
-                    perror(cmd->seq[i][0]);
+                if (execvp(l->seq[i][0], l->seq[i]) == -1) {
+                    perror(l->seq[i][0]);
+                    freecmd(l);
+                    free(l);
                     exit(EXIT_FAILURE);
                 }
             }
@@ -104,7 +106,7 @@ int main() {
         // Parent
         Close(tube[0]);
         Close(tube[1]);
-        for (int i = 0; i < nb_commands; i++)
+        for (int i = 0; i < argc; i++)
             Waitpid(pid[i], NULL, 0);
     }
 }

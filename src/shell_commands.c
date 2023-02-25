@@ -4,16 +4,6 @@
 #include <string.h>
 #include "shell_commands.h"
 
-void cmd_exit(int argc, char *args[]) {
-    if (argc > 2)
-        fprintf(stderr, "%s: too many arguments\n", args[0]);
-    else if (argc == 2)
-        // RED SECURITY ALERT : atoi not safe !!!!!!!!!!!!! :)
-        exit(atoi(args[1]));
-    else
-        exit(0);
-}
-
 void cmd_cd(int argc, char *args[]) {
     if (argc > 2)
         fprintf(stderr, "%s: too many arguments\n", args[0]);
@@ -28,15 +18,26 @@ void cmd_cd(int argc, char *args[]) {
     free(pwd);
 }
 
-int check_internal_commands(char **cmd) {
+int check_internal_commands(Cmdline *l, int cmd_index) {
+    char **cmd = l->seq[cmd_index];
+
     int argc = 1;
     while (cmd[argc] != NULL)
         argc++;
 
     // Command is "exit" or "quit"
     if (strcmp(cmd[0], "exit") == 0 || strcmp(cmd[0], "quit") == 0) {
-        cmd_exit(argc, cmd);
-        return 1;
+        if (argc > 2)
+            fprintf(stderr, "%s: too many arguments\n", cmd[0]);
+        else {
+            int code = 0;
+            // If there is an argument, use it as exit code, otherwise use 0 by default
+            if (argc == 2)
+                code = atoi(cmd[1]);  // RED SECURITY ALERT : atoi not safe !!! :)
+            freecmd(l);
+            free(l);
+            exit(code);
+        }
     }
 
     // Command is "cd"

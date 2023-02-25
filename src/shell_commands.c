@@ -34,8 +34,7 @@ int check_internal_commands(Cmdline *l, int cmd_index) {
             // If there is an argument, use it as exit code, otherwise use 0 by default
             if (argc == 2)
                 code = atoi(cmd[1]);  // RED SECURITY ALERT : atoi not safe !!! :)
-            freecmd(l);
-            free(l);
+            freecmd2(l);
             exit(code);
         }
     }

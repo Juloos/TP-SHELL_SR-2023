@@ -90,6 +90,10 @@ static char **split_in_words(char *line) {
                 w = "|";
                 cur++;
                 break;
+            case '&':
+                w = "&";
+                cur++;
+                break;
             default:
                 /* Another word */
                 start = cur;
@@ -102,6 +106,7 @@ static char **split_in_words(char *line) {
                         case '<':
                         case '>':
                         case '|':
+                        case '&':
                             c = 0;
                             break;
                         default:;
@@ -136,11 +141,16 @@ static void freeseq(char ***seq) {
 
 
 /* Free the fields of the structure but not the structure itself */
-void freecmd(struct cmdline *s) {
-    if (s->err) free(s->err);
+static void freecmd(struct cmdline *s) {
     if (s->in) free(s->in);
     if (s->out) free(s->out);
     if (s->seq) freeseq(s->seq);
+}
+
+void freecmd2(struct cmdline *s) {
+    if (s->err) free(s->err);
+    freecmd(s);
+    free(s);
 }
 
 
@@ -178,6 +188,7 @@ struct cmdline *readcmd(void) {
         static_cmdline = s = xmalloc(sizeof(struct cmdline));
     else
         freecmd(s);
+    s->bg = 0;
     s->err = 0;
     s->in = 0;
     s->out = 0;
@@ -225,6 +236,24 @@ struct cmdline *readcmd(void) {
                 cmd[0] = 0;
                 cmd_len = 0;
                 break;
+            case '&':
+                /* Tricky : the word can only be "&" */
+                // Background operator should be the last word, otherwise it was misplaced
+                if (words[i] != 0 || w[1] != 0) {
+                    // If the next character is '&' then the user tried to use '&&', which is not supported
+                    if (strcmp(words[i], "&") == 0)
+                        s->err = "only one background operator supported";
+                    else
+                        s->err = "misplaced background operator";
+                    goto error;
+                }
+                // There should be only one background operator
+                if (s->bg) {
+                    s->err = "only one background operator supported";
+                    goto error;
+                }
+                s->bg = 1;
+                break;
             default:
                 cmd = xrealloc(cmd, (cmd_len + 2) * sizeof(char *));
                 cmd[cmd_len++] = w;
@@ -251,6 +280,7 @@ struct cmdline *readcmd(void) {
             case '<':
             case '>':
             case '|':
+            case '&':
                 break;
             default:
                 free(w);

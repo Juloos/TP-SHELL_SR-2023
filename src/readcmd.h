@@ -12,6 +12,7 @@ struct cmdline *readcmd(void);
 
 /* Structure returned by readcmd() */
 struct cmdline {
+    int bg;       // 1 if the command line ends with '&', 0 otherwise
     char *err;    // If not null, it is an error message that should be displayed. The other fields are null.
     char *in;     // If not null : name of file for input redirection.
     char *out;    // If not null : name of file for output redirection.
@@ -19,7 +20,7 @@ struct cmdline {
 };
 typedef struct cmdline Cmdline;
 
-void freecmd(struct cmdline *s);
+void freecmd2(struct cmdline *s);
 
 /* Field seq of struct cmdline :
 A command line is a sequence of commands whose output is linked to the input

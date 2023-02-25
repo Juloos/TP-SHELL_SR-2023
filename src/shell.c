@@ -24,9 +24,22 @@
 void exec_cmd(char **cmd) {
 }
 
+void handle_child(int sig) {
+    int status;
+    pid_t pid;
+    do {
+        pid = waitpid(-1, &status, WNOHANG | WUNTRACED);
+        if (!WIFEXITED(status))
+            perror(0);
+    } while (pid > 0);
+}
+
 
 int main() {
     Cmdline *l;
+
+    int jobs = 1;  // rough ID-entification of jobs, to be improved later
+    Signal(SIGCHLD, handle_child);
 
     char hostname[256];  // 255 is the max length of a hostname
     gethostname(hostname, 256);
@@ -96,8 +109,7 @@ int main() {
                 // Execute the command and check that it exists
                 if (execvp(l->seq[i][0], l->seq[i]) == -1) {
                     perror(l->seq[i][0]);
-                    freecmd(l);
-                    free(l);
+                    freecmd2(l);
                     exit(EXIT_FAILURE);
                 }
             }
@@ -106,7 +118,11 @@ int main() {
         // Parent
         Close(tube[0]);
         Close(tube[1]);
-        for (int i = 0; i < argc; i++)
-            Waitpid(pid[i], NULL, 0);
+        // Wait for all children to terminate if not in background
+        if (l->bg == 0)
+            for (int i = 0; i < argc; i++)
+                Waitpid(pid[i], NULL, 0);
+        else
+            printf("[%d] %d\n", jobs++, pid[0]);
     }
 }

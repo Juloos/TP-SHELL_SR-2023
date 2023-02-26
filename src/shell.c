@@ -39,14 +39,25 @@ int main() {
     Cmdline *l;
 
     int jobs = 1;  // rough ID-entification of jobs, to be improved later
-    Signal(SIGCHLD, handle_child);
 
+    char *home = getenv("HOME");
     char hostname[256];  // 255 is the max length of a hostname
-    gethostname(hostname, 256);
+    gethostname(hostname, 255);
 
     while (1) {
-        // Afficher un beau prompt
-        printf("%s%s@%s%s:%s%s%s$ ", GREEN, getenv("USER"), hostname, RESET, BLUE, getenv("PWD"), RESET);
+        char *pwd = getcwd(NULL, 0);                            //  -|
+        int cmp = (strncmp(pwd, home, strlen(home)) == 0);  //   |
+        int homelen = strlen(home);                         //   |
+        if (cmp) {                                              //   |> Get CWD and manipulate it to display "~"
+            pwd += homelen - 1;                                 //   |  instead of the home path
+            *pwd = '~';                                         //   |
+        }                                                       //  -|
+        // Show a nice prompt
+        printf("%s%s@%s%s:%s%s%s$ ", GREEN, getenv("USER"), hostname, RESET, BLUE, pwd, RESET);
+        if (cmp)                                                //  -|
+            pwd -= homelen - 1;                                 //   |> Restore and free pwd
+        free(pwd);                                      //  -|
+
 
         l = readcmd();
 
@@ -66,9 +77,17 @@ int main() {
         if (!l->seq[0])
             continue;
 
-        // Execute internal command and continue if any
+        // Execute internal command and continue if it is one
         if (check_internal_commands(l, 0) == 1)
             continue;
+
+
+        // Remove the SIGCHLD handler if command is not in background mode, in case it was set by a previous command
+        if (l->bg == 0)
+            Signal(SIGCHLD, SIG_DFL);
+        // Otherwise set the SIGCHLD handler
+        else
+            Signal(SIGCHLD, handle_child);
 
 
         int tube[2];

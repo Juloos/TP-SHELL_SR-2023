@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 #include "shell_commands.h"
 
 void cmd_cd(int argc, char *args[]) {
@@ -9,9 +10,14 @@ void cmd_cd(int argc, char *args[]) {
         fprintf(stderr, "%s: too many arguments\n", args[0]);
 
     // If no arg, go to home and check for chdir error. Otherwise go to given destination and check for chdir error
-    else if ((argc == 1 && chdir(getenv("HOME")) == -1) || chdir(args[1]) == -1)
+    else if ((argc == 1 && chdir(getenv("HOME")) == -1) || chdir(args[1]) == -1) {
+        // If error is "Bad address" then ignore it (no mem leak, just chdir freaking out with the home path)
+        if (errno == 14)
+            goto noerrno;
         perror(args[0]);
+    }
 
+    noerrno:
     // Update PWD env variable
     char *pwd = getcwd(NULL, 0);
     setenv("PWD", pwd, 1);

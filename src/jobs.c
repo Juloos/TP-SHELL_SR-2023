@@ -5,14 +5,18 @@ void initjobs() {
     return;
 }
 
-int addjob(pid_t pid) {
+int addjob(Cmdline *l, pid_t *pids) {
     return 0;
 }
 
-void deletejob(pid_t pid) {
-    return;
+int deletejob(int job_id) {
+    return 0;
 }
 
 void killjobs() {
+    return;
+}
+
+void waitfgjob() {
     return;
 }

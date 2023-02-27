@@ -29,6 +29,7 @@ void exec_cmd(char **cmd) {
 void handle_child(int sig) {
     int olderrno = errno;                                            // Save errno
     sigset_t mask_all, prev_all;                                     // * Another signal masks setup
+    Sigfillset(&mask_all);
     int status;
     pid_t pid;
     while ((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {  // Reaping all terminated children
@@ -50,6 +51,7 @@ int main() {
     Sigemptyset(&mask_one);                  // *    |
     Sigaddset(&mask_one, SIGCHLD);           // *   -|
     initjobs();                              // Initialize the job list
+    Signal(SIGCHLD, handle_child);
 
     char *home = getenv("HOME");
     static char hostname[256];  // 255 is the max length of a hostname
@@ -94,16 +96,8 @@ int main() {
             continue;
 
 
-        // Remove the SIGCHLD handler if command is not in background mode, in case it was set by a previous command
-        if (l->bg == 0)
-            Signal(SIGCHLD, SIG_DFL);
-        // Otherwise set the SIGCHLD handler
-        else
-            Signal(SIGCHLD, handle_child);
-
         // * Block SIGCHLD
         Sigprocmask(SIG_BLOCK, &mask_one, &prev_one);
-
 
         int tube[2];
         pipe(tube);
@@ -112,9 +106,9 @@ int main() {
         while (l->seq[argc] != NULL)
             argc++;
 
-        pid_t pid[argc];
+        pid_t pids[argc];
         for (int i = 0; i < argc; i++) {
-            if ((pid[i] = Fork()) == 0) {
+            if ((pids[i] = Fork()) == 0) {
                 // Child
 
                 // Input Redirect if first command
@@ -155,19 +149,18 @@ int main() {
             }
         }
         // Parent
+
+        Sigprocmask(SIG_BLOCK, &mask_all, NULL);    // * Block Signal Interrupts
+        int job_id = addjob(l, pids);               // * Add the child to the job list
+        Sigprocmask(SIG_SETMASK, &prev_one, NULL);  // * Restore previous signal mask
+
         Close(tube[0]);
         Close(tube[1]);
 
-        // Add the child to the job list if in background
-        if (l->bg) {
-            Sigprocmask(SIG_BLOCK, &mask_all, NULL);        // * Block Signal Interrupts
-            printf("[%d] %d\n", addjob(pid[0]), pid[0]);  // Show the job id (returned by addjob) and pid
-        }
-        Sigprocmask(SIG_SETMASK, &prev_one, NULL);          // * Restore previous signal mask
-
-        // Wait for all children to terminate if not in background
+        // Wait for all children to terminate if not in background, print the job otherwise
         if (l->bg == 0)
-            for (int i = 0; i < argc; i++)
-                Waitpid(pid[i], NULL, 0);
+            waitfg();
+        else
+            printf("[%d] %d\n", job_id, pids[0]);
     }
 }

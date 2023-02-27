@@ -3,8 +3,6 @@
 
 #include "readcmd.h"
 
-void check_internal_commands(Cmdline *cmd);
-
-void cmd_exit(void);
+int check_internal_commands(Cmdline *l, int cmd_index);
 
 #endif //TP_SHELL_SR_2023_SHELL_COMMANDS_H

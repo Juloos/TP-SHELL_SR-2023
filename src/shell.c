@@ -10,56 +10,90 @@
 #include "csapp.h"
 
 // La vie est plus belle avec des couleurs
-#define BLACK "\e[0;30m"
-#define RED "\e[0;31m"
-#define GREEN "\e[0;32m"
-#define YELLOW "\e[0;33m"
-#define BLUE "\e[0;34m"
-#define MAGENTA "\e[0;35m"
-#define CYAN "\e[0;36m"
-#define WHITE "\e[0;37m"
+#define BLACK "\e[1;30m"
+#define RED "\e[1;31m"
+#define GREEN "\e[1;32m"
+#define YELLOW "\e[1;33m"
+#define BLUE "\e[1;34m"
+#define MAGENTA "\e[1;35m"
+#define CYAN "\e[1;36m"
+#define WHITE "\e[1;37m"
 #define RESET "\e[0m"
 
 
 void exec_cmd(char **cmd) {
 }
 
+void handle_child(int sig) {
+    int status;
+    pid_t pid;
+    do {
+        pid = waitpid(-1, &status, WNOHANG | WUNTRACED);
+        if (!WIFEXITED(status))
+            perror(0);
+    } while (pid > 0);
+}
+
 
 int main() {
-    char *pwd;
-    char *login = getenv("USER");
-    Cmdline *cmd;
+    Cmdline *l;
+
+    int jobs = 1;  // rough ID-entification of jobs, to be improved later
+
+    char *home = getenv("HOME");
+    char hostname[256];  // 255 is the max length of a hostname
+    gethostname(hostname, 255);
 
     while (1) {
-        pwd = getenv("PWD");
-        // Afficher un beau prompt
-        printf("%s%s%s:%s%s%s$ ", GREEN, login, RESET, BLUE, pwd, RESET);
+        char *pwd = getcwd(NULL, 0);                            //  -|
+        int cmp = (strncmp(pwd, home, strlen(home)) == 0);  //   |
+        int homelen = strlen(home);                         //   |
+        if (cmp) {                                              //   |> Get CWD and manipulate it to display "~"
+            pwd += homelen - 1;                                 //   |  instead of the home path
+            *pwd = '~';                                         //   |
+        }                                                       //  -|
+        // Show a nice prompt
+        printf("%s%s@%s%s:%s%s%s$ ", GREEN, getenv("USER"), hostname, RESET, BLUE, pwd, RESET);
+        if (cmp)                                                //  -|
+            pwd -= homelen - 1;                                 //   |> Restore and free pwd
+        free(pwd);                                      //  -|
 
-        cmd = readcmd();
+
+        l = readcmd();
 
         // If input stream closed, normal termination
-        if (!cmd) {
+        if (!l) {
             printf("\n");
-            exit(0);
+            exit(0);  // No need to free l before exit, readcmd() already did it
         }
 
         // Syntax error, read another command
-        if (cmd->err) {
-            printf("error: %s\n", cmd->err);
+        if (l->err) {
+            fprintf(stderr, "synthax error: %s\n", l->err);
             continue;
         }
 
         // Empty command
-        if (!cmd->seq[0])
+        if (!l->seq[0])
             continue;
 
-        // Execute internal command if any
-        check_internal_commands(cmd);
 
-		
+        // Execute internal command and continue if it is one
+        if (check_internal_commands(l, 0) == 1)
+            continue;
+
+
+		// Remove the SIGCHLD handler if command is not in background mode, in case it was set by a previous command
+        if (l->bg == 0)
+            Signal(SIGCHLD, SIG_DFL);
+        // Otherwise set the SIGCHLD handler
+        else
+            Signal(SIGCHLD, handle_child);
+
+
 
 		int nb_commands = 0;
-		while (cmd->seq[nb_commands] != NULL) {
+		while (l->seq[nb_commands] != NULL) {
 			nb_commands++;
 		}
 
@@ -80,8 +114,8 @@ int main() {
 				// Child
 
 				// Input Redirect if first command
-				if ((cmd->in != NULL) && (i == 0)) {
-					int fd = Open(cmd->in, O_RDONLY, 0);
+				if ((l->in != NULL) && (i == 0)) {
+					int fd = Open(l->in, O_RDONLY, 0);
 					Dup2(fd, 0);
 				}
 
@@ -99,17 +133,18 @@ int main() {
 
 
 				// Output Redirect if last command
-				if ((cmd->out != NULL) && (i == nb_commands - 1)) {
-					int fd = Open(cmd->out, O_CREAT | O_WRONLY, 0);
+				if ((l->out != NULL) && (i == nb_commands - 1)) {
+					int fd = Open(l->out, O_CREAT | O_WRONLY, 0);
 					Dup2(fd, 1);
 				}
+
 
 				// Make it a process group leader
                 Setpgid(getpid(), getpid());
 
 				// Execute the command and check that it exists
-				if (execvp(cmd->seq[i][0], cmd->seq[i]) == -1) {
-					perror(cmd->seq[i][0]);
+				if (execvp(l->seq[i][0], l->seq[i]) == -1) {
+					perror(l->seq[i][0]);
 					exit(EXIT_FAILURE);
 				}
 			}

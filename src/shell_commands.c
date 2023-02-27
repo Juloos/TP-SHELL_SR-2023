@@ -6,6 +6,8 @@
 #include "shell_commands.h"
 
 void cmd_cd(int argc, char *args[]) {
+    char *pwd;
+
     if (argc > 2)
         fprintf(stderr, "%s: too many arguments\n", args[0]);
 
@@ -19,7 +21,7 @@ void cmd_cd(int argc, char *args[]) {
 
     noerrno:
     // Update PWD env variable
-    char *pwd = getcwd(NULL, 0);
+    pwd = getcwd(NULL, 0);
     setenv("PWD", pwd, 1);
     free(pwd);
 }

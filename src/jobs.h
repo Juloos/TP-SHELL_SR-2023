@@ -5,11 +5,13 @@
 
 void initjobs(void);
 
-int addjob(Cmdline *l, pid_t *pids);
+int addjob(pid_t *pids, size_t nb_pids);
 
-int deletejob(int job_id);
+int deletejobpid(pid_t pid);
 
 void killjobs(void);
+
+void setfg(int job_id);
 
 void waitfgjob(void);
 

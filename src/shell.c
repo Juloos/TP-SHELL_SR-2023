@@ -23,21 +23,14 @@
 #define RESET "\e[0m"
 
 
-void exec_cmd(char **cmd) {
-}
-
 void handle_child(int sig) {
     int olderrno = errno;                                            // Save errno
-    sigset_t mask_all, prev_all;                                     // * Another signal masks setup
-    Sigfillset(&mask_all);
     int status;
     pid_t pid;
     while ((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {  // Reaping all terminated children
         if (!WIFEXITED(status))                                      // Child was not terminated normally
             perror(0);
-        Sigprocmask(SIG_BLOCK, &mask_all, &prev_all);                // * Block Signal Interrupts
-        deletejob(pid);                                              // Delete the child from the job list
-        Sigprocmask(SIG_SETMASK, &prev_all, NULL);                   // * Unblock Signal Interrupts
+        deletejobpid(pid);                                           // Delete the child from the job list
     }
     errno = olderrno;                                                // Restore errno
 }
@@ -102,12 +95,12 @@ int main() {
         int tube[2];
         pipe(tube);
 
-        int argc = 0;
-        while (l->seq[argc] != NULL)
-            argc++;
+        int pids_len = 1;
+        while (l->seq[pids_len] != NULL)
+            pids_len++;
 
-        pid_t pids[argc];
-        for (int i = 0; i < argc; i++) {
+        pid_t pids[pids_len];
+        for (int i = 0; i < pids_len; i++) {
             if ((pids[i] = Fork()) == 0) {
                 // Child
 
@@ -118,13 +111,13 @@ int main() {
                 }
 
                 // Output Redirect if last command
-                if ((l->out != NULL) && (i == argc - 1)) {
+                if ((l->out != NULL) && (i == pids_len - 1)) {
                     int fd = Open(l->out, O_CREAT | O_WRONLY, 0);
                     Dup2(fd, 1);
                 }
 
                 // Todo: comment that
-                if (argc > 1) {
+                if (pids_len > 1) {
                     if (i == 0) {
                         Close(tube[0]);
                         Dup2(tube[1], 1);
@@ -150,17 +143,18 @@ int main() {
         }
         // Parent
 
-        Sigprocmask(SIG_BLOCK, &mask_all, NULL);    // * Block Signal Interrupts
-        int job_id = addjob(l, pids);               // * Add the child to the job list
-        Sigprocmask(SIG_SETMASK, &prev_one, NULL);  // * Restore previous signal mask
-
         Close(tube[0]);
         Close(tube[1]);
 
-        // Wait for all children to terminate if not in background, print the job otherwise
+        int job_id = addjob(pids, pids_len);
         if (l->bg == 0)
-            waitfg();
+            setfg(job_id);
         else
             printf("[%d] %d\n", job_id, pids[0]);
+
+        // * Unblock SIGCHLD
+        Sigprocmask(SIG_SETMASK, &prev_one, NULL);
+
+        waitfgjob();
     }
 }

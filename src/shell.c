@@ -56,16 +56,26 @@ int main() {
         // Execute internal command if any
         check_internal_commands(cmd);
 
-		int tube[2];
-		pipe(tube);
+		
 
 		int nb_commands = 0;
 		while (cmd->seq[nb_commands] != NULL) {
 			nb_commands++;
 		}
+
+		int old_tube[2], new_tube[2];
 		
         int pid[nb_commands];
 		for (int i = 0; i < nb_commands; i++) {
+
+			old_tube[0] = new_tube[0];
+			old_tube[1] = new_tube[1];
+
+			// Create nb_commands - 1 tubes
+			if (i + 1 < nb_commands){
+				pipe(new_tube);
+			}
+
 			if ((pid[i] = Fork()) == 0) {
 				// Child
 
@@ -75,23 +85,27 @@ int main() {
 					Dup2(fd, 0);
 				}
 
+				// Prepare to read if not first command
+				if (i > 0) {
+					Close(old_tube[1]);
+					Dup2(old_tube[0], 0);
+				}
+
+				// Prepare to write if not last command
+				if (i + 1 < nb_commands) {
+					Close(new_tube[0]);
+					Dup2(new_tube[1], 1);
+				}
+
+
 				// Output Redirect if last command
 				if ((cmd->out != NULL) && (i == nb_commands - 1)) {
 					int fd = Open(cmd->out, O_CREAT | O_WRONLY, 0);
 					Dup2(fd, 1);
 				}
-				
-				if (nb_commands > 1) {
-					if (i == 0) {
-						Close(tube[0]);
-						Dup2(tube[1], 1);
-					}
-					else {
-						Close(tube[1]);
-						Dup2(tube[0], 0);
-					}
-				}
 
+				// Make it a process group leader
+                Setpgid(getpid(), getpid());
 
 				// Execute the command and check that it exists
 				if (execvp(cmd->seq[i][0], cmd->seq[i]) == -1) {
@@ -99,12 +113,17 @@ int main() {
 					exit(EXIT_FAILURE);
 				}
 			}
+
+			// Parent
+			// Close tube between process i - 1 and i
+			if ((nb_commands > 1) && (i > 0)) {
+				Close(old_tube[0]);
+				Close(old_tube[1]);
+			}
 		}
         // Parent
-		Close(tube[0]);
-		Close(tube[1]);
 		for (int i = 0; i < nb_commands; i++) {
-        	Waitpid(pid[i], NULL, 0);
+        	Waitpid(-1, NULL, 0);
 		}
     }
 }

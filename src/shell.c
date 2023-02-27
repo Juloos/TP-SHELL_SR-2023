@@ -75,7 +75,8 @@ int main() {
         // If input stream closed, normal termination
         if (!l) {
             printf("\n");
-            exit(0);  // No need to free l before exit, readcmd() already did it
+            killjobs(); // Kill all remaining jobs before exiting to avoids zombies
+            exit(0);    // No need to free l before exit, readcmd() already did it
         }
 
         // Syntax error, read another command

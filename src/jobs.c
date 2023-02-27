@@ -1,7 +1,7 @@
 #include "jobs.h"
 
 
-void initjobs(void) {
+void initjobs() {
     return;
 }
 
@@ -10,5 +10,9 @@ int addjob(pid_t pid) {
 }
 
 void deletejob(pid_t pid) {
+    return;
+}
+
+void killjobs() {
     return;
 }

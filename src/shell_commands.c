@@ -4,6 +4,7 @@
 #include <string.h>
 #include <errno.h>
 #include "shell_commands.h"
+#include "jobs.h"
 
 void cmd_cd(int argc, char *args[]) {
     char *pwd;
@@ -43,6 +44,7 @@ int check_internal_commands(Cmdline *l, int cmd_index) {
             if (argc == 2)
                 code = atoi(cmd[1]);  // RED SECURITY ALERT : atoi not safe !!! :)
             freecmd2(l);
+            killjobs();
             exit(code);
         }
     }

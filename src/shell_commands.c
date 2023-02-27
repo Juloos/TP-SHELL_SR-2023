@@ -52,6 +52,11 @@ int check_internal_commands(Cmdline *l, int cmd_index) {
         cmd_cd(argc, cmd);
         return 1;
     }
+ 
+    // Ignore comments
+    if (cmd[0][0] == '#') {
+        return 1;
+    }
 
     return 0;
 }

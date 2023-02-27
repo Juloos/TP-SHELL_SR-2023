@@ -35,7 +35,16 @@ void handle_child(int sig) {
 }
 
 
-int main() {
+int main(int argc, char** argv) {
+	
+	// If argument is provided, read file instead of stdin and disable shell prints
+	int print = 1;
+	if (argc > 1) {
+		int fd = Open(argv[1], O_RDONLY, 0);
+		Dup2(fd, 0);
+		print = 0;
+	}
+
     Cmdline *l;
 
     int jobs = 1;  // rough ID-entification of jobs, to be improved later
@@ -53,7 +62,8 @@ int main() {
             *pwd = '~';                                         //   |
         }                                                       //  -|
         // Show a nice prompt
-        printf("%s%s@%s%s:%s%s%s$ ", GREEN, getenv("USER"), hostname, RESET, BLUE, pwd, RESET);
+		if (print)
+        	printf("%s%s@%s%s:%s%s%s$ ", GREEN, getenv("USER"), hostname, RESET, BLUE, pwd, RESET);
         if (cmp)                                                //  -|
             pwd -= homelen - 1;                                 //   |> Restore and free pwd
         free(pwd);                                      //  -|
@@ -63,7 +73,8 @@ int main() {
 
         // If input stream closed, normal termination
         if (!l) {
-            printf("\n");
+			if (print)
+            	printf("\n");
             exit(0);  // No need to free l before exit, readcmd() already did it
         }
 

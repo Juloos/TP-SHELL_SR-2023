@@ -125,6 +125,9 @@ int main() {
                     }
                 }
 
+                // Make it a process group leader
+                Setpgid(getpid(), getpid());
+
                 // Execute the command and check that it exists
                 if (execvp(l->seq[i][0], l->seq[i]) == -1) {
                     perror(l->seq[i][0]);

@@ -5,8 +5,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 #include "readcmd.h"
 #include "shell_commands.h"
+#include "jobs.h"
 #include "csapp.h"
 
 // La vie est plus belle avec des couleurs
@@ -25,38 +27,47 @@ void exec_cmd(char **cmd) {
 }
 
 void handle_child(int sig) {
+    int olderrno = errno;                                            // Save errno
+    sigset_t mask_all, prev_all;                                     // * Another signal masks setup
     int status;
     pid_t pid;
-    do {
-        pid = waitpid(-1, &status, WNOHANG | WUNTRACED);
-        if (!WIFEXITED(status))
+    while ((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {  // Reaping all terminated children
+        if (!WIFEXITED(status))                                      // Child was not terminated normally
             perror(0);
-    } while (pid > 0);
+        Sigprocmask(SIG_BLOCK, &mask_all, &prev_all);                // * Block Signal Interrupts
+        deletejob(pid);                                              // Delete the child from the job list
+        Sigprocmask(SIG_SETMASK, &prev_all, NULL);                   // * Unblock Signal Interrupts
+    }
+    errno = olderrno;                                                // Restore errno
 }
 
 
 int main() {
     Cmdline *l;
 
-    int jobs = 1;  // rough ID-entification of jobs, to be improved later
+    sigset_t mask_all, mask_one, prev_one;   // *   -|
+    Sigfillset(&mask_all);                   // *    |> Set up signal masks, taken from Vania's code in the course : *
+    Sigemptyset(&mask_one);                  // *    |
+    Sigaddset(&mask_one, SIGCHLD);           // *   -|
+    initjobs();                              // Initialize the job list
 
     char *home = getenv("HOME");
-    char hostname[256];  // 255 is the max length of a hostname
+    static char hostname[256];  // 255 is the max length of a hostname
     gethostname(hostname, 255);
 
     while (1) {
-        char *pwd = getcwd(NULL, 0);                            //  -|
+        char *pwd = getcwd(NULL, 0);                        //  -|
         int cmp = (strncmp(pwd, home, strlen(home)) == 0);  //   |
-        int homelen = strlen(home);                         //   |
-        if (cmp) {                                              //   |> Get CWD and manipulate it to display "~"
-            pwd += homelen - 1;                                 //   |  instead of the home path
-            *pwd = '~';                                         //   |
-        }                                                       //  -|
+        size_t homelen = strlen(home);                      //   |
+        if (cmp) {                                          //   |> Get CWD and manipulate it to display "~"
+            pwd += homelen - 1;                             //   |  instead of the home path
+            *pwd = '~';                                     //   |
+        }                                                   //  -|
         // Show a nice prompt
         printf("%s%s@%s%s:%s%s%s$ ", GREEN, getenv("USER"), hostname, RESET, BLUE, pwd, RESET);
-        if (cmp)                                                //  -|
-            pwd -= homelen - 1;                                 //   |> Restore and free pwd
-        free(pwd);                                      //  -|
+        if (cmp)                                            //  -|
+            pwd -= homelen - 1;                             //   |> Restore and free pwd
+        free(pwd);                                          //  -|
 
 
         l = readcmd();
@@ -89,6 +100,9 @@ int main() {
         else
             Signal(SIGCHLD, handle_child);
 
+        // * Block SIGCHLD
+        Sigprocmask(SIG_BLOCK, &mask_one, &prev_one);
+
 
         int tube[2];
         pipe(tube);
@@ -97,7 +111,7 @@ int main() {
         while (l->seq[argc] != NULL)
             argc++;
 
-        int pid[argc];
+        pid_t pid[argc];
         for (int i = 0; i < argc; i++) {
             if ((pid[i] = Fork()) == 0) {
                 // Child
@@ -128,6 +142,9 @@ int main() {
                 // Make it a process group leader
                 Setpgid(getpid(), getpid());
 
+                // * Unblock SIGCHLD
+                Sigprocmask(SIG_SETMASK, &prev_one, NULL);
+
                 // Execute the command and check that it exists
                 if (execvp(l->seq[i][0], l->seq[i]) == -1) {
                     perror(l->seq[i][0]);
@@ -136,15 +153,20 @@ int main() {
                 }
             }
         }
-
         // Parent
         Close(tube[0]);
         Close(tube[1]);
+
+        // Add the child to the job list if in background
+        if (l->bg) {
+            Sigprocmask(SIG_BLOCK, &mask_all, NULL);        // * Block Signal Interrupts
+            printf("[%d] %d\n", addjob(pid[0]), pid[0]);  // Show the job id (returned by addjob) and pid
+        }
+        Sigprocmask(SIG_SETMASK, &prev_one, NULL);          // * Restore previous signal mask
+
         // Wait for all children to terminate if not in background
         if (l->bg == 0)
             for (int i = 0; i < argc; i++)
                 Waitpid(pid[i], NULL, 0);
-        else
-            printf("[%d] %d\n", jobs++, pid[0]);
     }
 }

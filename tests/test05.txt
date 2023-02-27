@@ -5,5 +5,5 @@ ls &
 echo &
 ls &
 echo &
-SLEEP 0.2
+SLEEP 1
 ps -l

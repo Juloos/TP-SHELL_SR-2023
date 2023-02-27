@@ -5,5 +5,5 @@ ls &
 echo &
 ls &
 echo &
+SLEEP 1
 ps -l
-WAIT

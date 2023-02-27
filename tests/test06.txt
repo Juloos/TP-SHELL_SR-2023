@@ -5,5 +5,4 @@ ls &
 echo &
 ls &
 echo &
-exit
 ps -l

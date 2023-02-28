@@ -68,11 +68,17 @@ static char **split_in_words(char *line) {
     char **tab = 0;
     size_t l = 0;
     char c;
+    int escape = 0;
+    int escaped_c = 0;
 
     while ((c = *cur) != 0) {
         char *w = 0;
         char *start;
+        if (escaped_c)
+            goto readword;
         switch (c) {
+            case '\\':
+                escaped_c = 1;
             case ' ':
             case '\t':
                 /* Ignore any whitespace */
@@ -94,11 +100,38 @@ static char **split_in_words(char *line) {
                 w = "&";
                 cur++;
                 break;
+            case '\'':
+                escape = 1;
+            case '"':
+                start = ++cur;
+                // While current char is not null, and not end of quote
+                while ((c = *cur) && (c != start[-1] || escaped_c)) {
+                    cur++;
+                    // if current char is backslash and escape is disabled and current char is not escaped
+                    if (c == '\\' && !escape && !escaped_c)
+                        escaped_c = 1;
+                    else
+                        escaped_c = 0;
+                }
+                if (c == 0) {
+                    errno = EINVAL;
+                    perror(0);
+                }
+                w = xmalloc((cur - start + 1) * sizeof(char));
+                strncpy(w, start, cur - start);
+                w[cur - start] = 0;
+                cur++;
+                break;
             default:
+            readword:
                 /* Another word */
                 start = cur;
                 while (c) {
                     c = *++cur;
+                    if (escaped_c) {
+                        escaped_c = 0;
+                        continue;
+                    }
                     switch (c) {
                         case 0:
                         case ' ':
@@ -109,12 +142,21 @@ static char **split_in_words(char *line) {
                         case '&':
                             c = 0;
                             break;
+                        case '\\':
+                            escaped_c = 1;
                         default:;
                     }
                 }
                 w = xmalloc((cur - start + 1) * sizeof(char));
-                strncpy(w, start, cur - start);
-                w[cur - start] = 0;
+                // Copy the word from start to cur without the escaping backslashes
+                int j = 0;
+                for (int i = 0; i < cur - start; i++) {
+                    if (start[j + i] == '\\')
+                        w[i] = start[++j + i];
+                    else
+                        w[i] = start[j + i];
+                }
+                w[cur - start - j] = 0;
         }
         if (w) {
             tab = xrealloc(tab, (l + 1) * sizeof(char *));

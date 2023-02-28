@@ -29,7 +29,7 @@ void handle_child(int sig) {
     pid_t pid;
     while ((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {  // Reaping all terminated children
         if (!WIFEXITED(status))                                      // Child was not terminated normally
-            perror(0);
+            perror("shell");
         deletejobpid(pid);                                           // Delete the child from the job list
     }
     errno = olderrno;                                                // Restore errno
@@ -180,7 +180,7 @@ int main(int argc, char *argv[]) {
         int job_id = addjob(l->raw, pids, pids_len);
         if (l->bg == 0)
             setfg(job_id);
-        else
+        else if (print)
             printf("[%d] %d\n", job_id, pids[0]);
 
         // * Unblock SIGCHLD

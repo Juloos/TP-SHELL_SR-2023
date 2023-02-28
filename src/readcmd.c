@@ -69,16 +69,11 @@ static char **split_in_words(char *line) {
     size_t l = 0;
     char c;
     int escape = 0;
-    int escaped_c = 0;
 
     while ((c = *cur) != 0) {
         char *w = 0;
         char *start;
-        if (escaped_c)
-            goto readword;
         switch (c) {
-            case '\\':
-                escaped_c = 1;
             case ' ':
             case '\t':
                 /* Ignore any whitespace */
@@ -105,6 +100,7 @@ static char **split_in_words(char *line) {
             case '"':
                 start = ++cur;
                 // While current char is not null, and not end of quote
+                int escaped_c = 0;
                 while ((c = *cur) && (c != start[-1] || escaped_c)) {
                     cur++;
                     // if current char is backslash and escape is disabled and current char is not escaped
@@ -121,17 +117,13 @@ static char **split_in_words(char *line) {
                 strncpy(w, start, cur - start);
                 w[cur - start] = 0;
                 cur++;
+                escape = 0;
                 break;
             default:
-            readword:
                 /* Another word */
                 start = cur;
                 while (c) {
-                    c = *++cur;
-                    if (escaped_c) {
-                        escaped_c = 0;
-                        continue;
-                    }
+                    c = *cur++;
                     switch (c) {
                         case 0:
                         case ' ':
@@ -143,20 +135,13 @@ static char **split_in_words(char *line) {
                             c = 0;
                             break;
                         case '\\':
-                            escaped_c = 1;
+                            cur++;
                         default:;
                     }
                 }
-                w = xmalloc((cur - start + 1) * sizeof(char));
-                // Copy the word from start to cur without the escaping backslashes
-                int j = 0;
-                for (int i = 0; i < cur - start; i++) {
-                    if (start[j + i] == '\\')
-                        w[i] = start[++j + i];
-                    else
-                        w[i] = start[j + i];
-                }
-                w[cur - start - j] = 0;
+                w = xmalloc((cur - start) * sizeof(char));
+                strncpy(w, start, cur - start - 1);
+                w[cur - start - 1] = 0;
         }
         if (w) {
             tab = xrealloc(tab, (l + 1) * sizeof(char *));
@@ -236,6 +221,9 @@ struct cmdline *readcmd(void) {
     s->out = 0;
     s->seq = 0;
 
+    int k;
+    size_t len;
+
     i = 0;
     while ((w = words[i++]) != 0) {
         switch (w[0]) {
@@ -297,6 +285,16 @@ struct cmdline *readcmd(void) {
                 s->bg = 1;
                 break;
             default:
+                // Change the word to delete the escaping backslashes
+                k = 0;
+                len = strlen(w);
+                for (int j = 0; j < len; j++) {
+                    if (w[k + j] == '\\')
+                        w[j] = w[++k + j];
+                    else
+                        w[j] = w[k + j];
+                }
+                w[len - k] = 0;
                 cmd = xrealloc(cmd, (cmd_len + 2) * sizeof(char *));
                 cmd[cmd_len++] = w;
                 cmd[cmd_len] = 0;

@@ -127,7 +127,7 @@ static char **split_in_words(char *line) {
 }
 
 
-static void freeseq(char ***seq) {
+void freeseq(char ***seq) {
     int i, j;
 
     for (i = 0; seq[i] != 0; i++) {
@@ -148,6 +148,8 @@ static void freecmd(struct cmdline *s) {
 }
 
 void freecmd2(struct cmdline *s) {
+    if (!s)
+        return;
     if (s->err) free(s->err);
     freecmd(s);
     free(s);

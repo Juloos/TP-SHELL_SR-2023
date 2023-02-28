@@ -39,11 +39,11 @@ void handle_child(int sig) {
 int main() {
     Cmdline *l;
 
-    sigset_t mask_all, mask_one, prev_one;   // *   -|
-    Sigfillset(&mask_all);                   // *    |> Set up signal masks, taken from Vania's code in the course : *
-    Sigemptyset(&mask_one);                  // *    |
-    Sigaddset(&mask_one, SIGCHLD);           // *   -|
-    initjobs();                              // Initialize the job list
+    sigset_t mask_one, prev_one;
+    Sigemptyset(&mask_one);
+    Sigaddset(&mask_one, SIGCHLD);
+
+    initjobs();
     Signal(SIGCHLD, handle_child);
 
     char *home = getenv("HOME");
@@ -70,7 +70,7 @@ int main() {
         // If input stream closed, normal termination
         if (!l) {
             printf("\n");
-            killjobs(); // Kill all remaining jobs before exiting to avoids zombies
+            killjobs(); // Kill all remaining jobs before exiting, avoids zombies
             exit(0);    // No need to free l before exit, readcmd() already did it
         }
 
@@ -103,6 +103,9 @@ int main() {
         for (int i = 0; i < pids_len; i++) {
             if ((pids[i] = Fork()) == 0) {
                 // Child
+
+                // No need to keep job list in child process, freeing memory
+                freejobs();
 
                 // Input Redirect if first command
                 if ((l->in != NULL) && (i == 0)) {
@@ -146,7 +149,7 @@ int main() {
         Close(tube[0]);
         Close(tube[1]);
 
-        int job_id = addjob(pids, pids_len);
+        int job_id = addjob(l->seq, pids);
         if (l->bg == 0)
             setfg(job_id);
         else

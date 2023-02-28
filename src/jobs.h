@@ -5,9 +5,15 @@
 
 void initjobs(void);
 
-int addjob(pid_t *pids, size_t nb_pids);
+int addjob(char ***cmd, pid_t *pids);
+
+int pausejob(int job_id);
+
+int resumejob(int job_id);
 
 int deletejobpid(pid_t pid);
+
+void freejobs(void);
 
 void killjobs(void);
 

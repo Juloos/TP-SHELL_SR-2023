@@ -20,6 +20,7 @@ struct cmdline {
 };
 typedef struct cmdline Cmdline;
 
+void freeseq(char ***seq);
 void freecmd2(struct cmdline *s);
 
 /* Field seq of struct cmdline :

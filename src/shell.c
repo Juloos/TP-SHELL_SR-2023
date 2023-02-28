@@ -41,7 +41,13 @@ int main() {
 
     sigset_t mask_one, prev_one;
     Sigemptyset(&mask_one);
+    Sigprocmask(SIG_SETMASK, &mask_one, NULL);  // Emptying the signal mask of the Shell
     Sigaddset(&mask_one, SIGCHLD);
+
+    // Make sure all signal handlers are SIG_DFL
+    for (int sig = 1; sig < 32; sig++)
+        if (sig != SIGKILL && sig != SIGSTOP)
+            Signal(sig, SIG_DFL);
 
     initjobs();
     Signal(SIGCHLD, handle_child);

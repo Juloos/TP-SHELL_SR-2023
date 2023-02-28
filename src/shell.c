@@ -45,7 +45,7 @@ int main() {
     Sigaddset(&mask_one, SIGCHLD);
 
     // Make sure all signal handlers are SIG_DFL
-    for (int sig = 1; sig < 32; sig++)
+    for (int sig = 1; sig < 32; sig++)  // 31 signals total
         if (sig != SIGKILL && sig != SIGSTOP)
             Signal(sig, SIG_DFL);
 

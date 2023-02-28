@@ -8,12 +8,12 @@
 
 typedef struct _job {
     int id;            // Job id
-    char ***cmd;       // Corresponding command line
-    int status;        // Current status of the job, 0: running, 1: stopped
+    char *cmd;         // Corresponding command line
+    int status;        // Current status of the job, 0: Running, 1: Stopped, 2: Done
     time_t starttime;  // Timestamp of the start of the job
     time_t pausetime;  // Timestamp of the last pause of the job
     pid_t *pids;       // Array of pids, the pids of the processus executing the commands in the command line
-    size_t nb_pids;    // Number of pids in the array, also the number of commands in the command line
+    size_t nb_pids;    // Number of pids in the array
 } Job;
 
 // Linked list structuration of the jobs
@@ -38,37 +38,26 @@ JobList *createjoblist(Job *job) {
     return j;
 }
 
-Job *createjob(char ***cmd, pid_t *pids) {
+Job *createjob(char *cmd, pid_t *pids, size_t nb_pids) {
     Job *job = (Job *) malloc(sizeof(Job));
     job->id = ++nb_id_used;
     job->status = 0;
     job->starttime = time(NULL);
     job->pausetime = job->starttime;
-    job->nb_pids = 0; while (cmd[job->nb_pids] != NULL) job->nb_pids++;
-    job->pids = (pid_t *) malloc(sizeof(pid_t) * job->nb_pids); memcpy(job->pids, pids, sizeof(pid_t) * job->nb_pids);
-    // Copy cmd to job->cmd
-    job->cmd = (char ***) malloc(sizeof(char **) * (job->nb_pids + 1));
-    for (size_t i = 0; i < job->nb_pids; i++) {
-        size_t j = 0; while (cmd[i][j] != NULL) j++;
-        job->cmd[i] = (char **) malloc(sizeof(char *) * (j + 1));
-        for (size_t k = 0; k < j; k++) {
-            job->cmd[i][k] = (char *) malloc(sizeof(char) * (strlen(cmd[i][k]) + 1));
-            strcpy(job->cmd[i][k], cmd[i][k]);
-        }
-        job->cmd[i][j] = NULL;
-    }
-    job->cmd[job->nb_pids] = NULL;
+    job->nb_pids = nb_pids;
+    job->pids = (pid_t *) malloc(sizeof(pid_t) * nb_pids); memcpy(job->pids, pids, sizeof(pid_t) * nb_pids);
+    job->cmd = (char *) malloc(sizeof(char) * (strlen(cmd) + 1)); strcpy(job->cmd, cmd);
     return job;
 }
 
 void freejob(Job *job) {
-    freeseq(job->cmd);
+    free(job->cmd);
     free(job->pids);
     free(job);
 }
 
-int _addjob(char ***cmd, pid_t *pids) {
-    JobList *j = createjoblist(createjob(cmd, pids));
+int _addjob(char *cmd, pid_t *pids, size_t nb_pids) {
+    JobList *j = createjoblist(createjob(cmd, pids, nb_pids));
     j->next = jobs;
     jobs = j;
     return j->job->id;
@@ -184,9 +173,9 @@ void initjobs() {
     fg = NULL;
 }
 
-int addjob(char ***cmd, pid_t *pids) {
+int addjob(char *cmd, pid_t *pids, size_t nb_pids) {
     Sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
-    int res = _addjob(cmd, pids);
+    int res = _addjob(cmd, pids, nb_pids);
     Sigprocmask(SIG_SETMASK, &prev_all, NULL);
     return res;
 }

@@ -127,7 +127,7 @@ static char **split_in_words(char *line) {
 }
 
 
-void freeseq(char ***seq) {
+static void freeseq(char ***seq) {
     int i, j;
 
     for (i = 0; seq[i] != 0; i++) {
@@ -145,6 +145,7 @@ static void freecmd(struct cmdline *s) {
     if (s->in) free(s->in);
     if (s->out) free(s->out);
     if (s->seq) freeseq(s->seq);
+    if (s->raw) free(s->raw);
 }
 
 void freecmd2(struct cmdline *s) {
@@ -184,7 +185,6 @@ struct cmdline *readcmd(void) {
     seq_len = 0;
 
     words = split_in_words(line);
-    free(line);
 
     if (!s)
         static_cmdline = s = xmalloc(sizeof(struct cmdline));
@@ -195,6 +195,7 @@ struct cmdline *readcmd(void) {
     s->in = 0;
     s->out = 0;
     s->seq = 0;
+    s->raw = line;
 
     i = 0;
     while ((w = words[i++]) != 0) {
@@ -299,6 +300,10 @@ struct cmdline *readcmd(void) {
     if (s->out) {
         free(s->out);
         s->out = 0;
+    }
+    if (s->raw) {
+        free(s->raw);
+        s->raw = 0;
     }
     return s;
 }

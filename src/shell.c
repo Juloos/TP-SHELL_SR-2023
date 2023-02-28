@@ -149,7 +149,7 @@ int main() {
         Close(tube[0]);
         Close(tube[1]);
 
-        int job_id = addjob(l->seq, pids);
+        int job_id = addjob(l->raw, pids, pids_len);
         if (l->bg == 0)
             setfg(job_id);
         else

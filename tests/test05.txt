@@ -1,8 +1,9 @@
 #
-# test05.txt - Tester la gestion des zombies avec des jobs en background
+# test05.txt - Tester la gestion des zombies avec des commandes en background
 #
 ls &
 echo &
 ls &
 echo &
-ps
+SLEEP 1
+ps -l

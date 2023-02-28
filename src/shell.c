@@ -5,8 +5,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 #include "readcmd.h"
 #include "shell_commands.h"
+#include "jobs.h"
 #include "csapp.h"
 
 // La vie est plus belle avec des couleurs
@@ -21,61 +23,70 @@
 #define RESET "\e[0m"
 
 
-void exec_cmd(char **cmd) {
-}
-
 void handle_child(int sig) {
+    int olderrno = errno;                                            // Save errno
     int status;
     pid_t pid;
-    do {
-        pid = waitpid(-1, &status, WNOHANG | WUNTRACED);
-        if (!WIFEXITED(status))
+    while ((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {  // Reaping all terminated children
+        if (!WIFEXITED(status))                                      // Child was not terminated normally
             perror(0);
-    } while (pid > 0);
+        deletejobpid(pid);                                           // Delete the child from the job list
+    }
+    errno = olderrno;                                                // Restore errno
 }
 
 
-int main(int argc, char** argv) {
-	
-	// If argument is provided, read file instead of stdin and disable shell prints
-	int print = 1;
-	if (argc > 1) {
-		int fd = Open(argv[1], O_RDONLY, 0);
-		Dup2(fd, 0);
-		print = 0;
-	}
+int main(int argc, char *argv[]) {
+    // If argument is provided, read file instead of stdin and disable shell prints
+    int print = 1;
+    if (argc > 1) {
+        int fd = Open(argv[1], O_RDONLY, 0);
+        Dup2(fd, 0);
+        print = 0;
+    }
 
     Cmdline *l;
 
-    int jobs = 1;  // rough ID-entification of jobs, to be improved later
+    sigset_t mask_one, prev_one;
+    Sigemptyset(&mask_one);
+    Sigprocmask(SIG_SETMASK, &mask_one, NULL);  // Emptying the signal mask of the Shell
+    Sigaddset(&mask_one, SIGCHLD);
+
+    // Make sure all signal handlers are SIG_DFL
+    for (int sig = 1; sig < 32; sig++)  // 31 signals total
+        if (sig != SIGKILL && sig != SIGSTOP)
+            Signal(sig, SIG_DFL);
+
+    initjobs();
+    Signal(SIGCHLD, handle_child);
 
     char *home = getenv("HOME");
-    char hostname[256];  // 255 is the max length of a hostname
+    static char hostname[256];  // 255 is the max length of a hostname
     gethostname(hostname, 255);
 
     while (1) {
-        char *pwd = getcwd(NULL, 0);                            //  -|
+        char *pwd = getcwd(NULL, 0);                        //  -|
         int cmp = (strncmp(pwd, home, strlen(home)) == 0);  //   |
-        int homelen = strlen(home);                         //   |
-        if (cmp) {                                              //   |> Get CWD and manipulate it to display "~"
-            pwd += homelen - 1;                                 //   |  instead of the home path
-            *pwd = '~';                                         //   |
-        }                                                       //  -|
-        // Show a nice prompt
-		if (print)
-        	printf("%s%s@%s%s:%s%s%s$ ", GREEN, getenv("USER"), hostname, RESET, BLUE, pwd, RESET);
-        if (cmp)                                                //  -|
-            pwd -= homelen - 1;                                 //   |> Restore and free pwd
-        free(pwd);                                      //  -|
+        size_t homelen = strlen(home);                      //   |
+        if (cmp) {                                          //   |> Get CWD and manipulate it to display "~"
+            pwd += homelen - 1;                             //   |  instead of the home path
+            *pwd = '~';                                     //   |
+        }                                                   //  -|
+        if (print)                                          // Show a nice prompt if awaited
+            printf("%s%s@%s%s:%s%s%s$ ", GREEN, getenv("USER"), hostname, RESET, BLUE, pwd, RESET);
+        if (cmp)                                            //  -|
+            pwd -= homelen - 1;                             //   |> Restore and free pwd
+        free(pwd);                                          //  -|
 
 
         l = readcmd();
 
         // If input stream closed, normal termination
         if (!l) {
-			if (print)
-            	printf("\n");
-            exit(0);  // No need to free l before exit, readcmd() already did it
+            if (print)
+                printf("\n");
+            killjobs(); // Kill all remaining jobs before exiting, avoids zombies
+            exit(0);    // No need to free l before exit, readcmd() already did it
         }
 
         // Syntax error, read another command
@@ -94,82 +105,87 @@ int main(int argc, char** argv) {
             continue;
 
 
-		// Remove the SIGCHLD handler if command is not in background mode, in case it was set by a previous command
-        if (l->bg == 0)
-            Signal(SIGCHLD, SIG_DFL);
-        // Otherwise set the SIGCHLD handler
-        else
-            Signal(SIGCHLD, handle_child);
+        // * Block SIGCHLD
+        Sigprocmask(SIG_BLOCK, &mask_one, &prev_one);
 
 
+        int pids_len = 1;
+        while (l->seq[pids_len] != NULL)
+            pids_len++;
 
-		int nb_commands = 0;
-		while (l->seq[nb_commands] != NULL) {
-			nb_commands++;
-		}
+        int old_tube[2], new_tube[2];
 
-		int old_tube[2], new_tube[2];
-		
-        int pid[nb_commands];
-		for (int i = 0; i < nb_commands; i++) {
+        int pids[pids_len];
+        for (int i = 0; i < pids_len; i++) {
 
-			old_tube[0] = new_tube[0];
-			old_tube[1] = new_tube[1];
+            old_tube[0] = new_tube[0];
+            old_tube[1] = new_tube[1];
 
-			// Create nb_commands - 1 tubes
-			if (i + 1 < nb_commands){
-				pipe(new_tube);
-			}
+            // Create nb_commands - 1 tubes
+            if (i + 1 < pids_len)
+                pipe(new_tube);
 
-			if ((pid[i] = Fork()) == 0) {
-				// Child
+            if ((pids[i] = Fork()) == 0) {
+                // Child
 
-				// Input Redirect if first command
-				if ((l->in != NULL) && (i == 0)) {
-					int fd = Open(l->in, O_RDONLY, 0);
-					Dup2(fd, 0);
-				}
+                // Input Redirect if first command
+                if ((l->in != NULL) && (i == 0)) {
+                    int fd = Open(l->in, O_RDONLY, 0);
+                    Dup2(fd, 0);
+                }
 
-				// Prepare to read if not first command
-				if (i > 0) {
-					Close(old_tube[1]);
-					Dup2(old_tube[0], 0);
-				}
+                // Prepare to read if not first command
+                if (i > 0) {
+                    Close(old_tube[1]);
+                    Dup2(old_tube[0], 0);
+                }
 
-				// Prepare to write if not last command
-				if (i + 1 < nb_commands) {
-					Close(new_tube[0]);
-					Dup2(new_tube[1], 1);
-				}
+                // Prepare to write if not last command
+                if (i + 1 < pids_len) {
+                    Close(new_tube[0]);
+                    Dup2(new_tube[1], 1);
+                }
 
-
-				// Output Redirect if last command
-				if ((l->out != NULL) && (i == nb_commands - 1)) {
-					int fd = Open(l->out, O_CREAT | O_WRONLY, 0);
-					Dup2(fd, 1);
-				}
+                // Output Redirect if last command
+                if ((l->out != NULL) && (i == pids_len - 1)) {
+                    int fd = Open(l->out, O_CREAT | O_WRONLY, 0);
+                    Dup2(fd, 1);
+                }
 
 
-				// Make it a process group leader
+                // No need to keep job list in child process, freeing memory
+                freejobs();
+
+                // Make it a process group leader
                 Setpgid(getpid(), getpid());
 
-				// Execute the command and check that it exists
-				if (execvp(l->seq[i][0], l->seq[i]) == -1) {
-					perror(l->seq[i][0]);
-					exit(EXIT_FAILURE);
-				}
-			}
+                // * Unblock SIGCHLD
+                Sigprocmask(SIG_SETMASK, &prev_one, NULL);
 
-			// Parent
-			// Close tube between process i - 1 and i
-			if ((nb_commands > 1) && (i > 0)) {
-				Close(old_tube[0]);
-				Close(old_tube[1]);
-			}
-		}
+                // Execute the command and check that it exists
+                if (execvp(l->seq[i][0], l->seq[i]) == -1) {
+                    perror(l->seq[i][0]);
+                    freecmd2(l);
+                    exit(EXIT_FAILURE);
+                }
+            }
+            // Parent
+            // Close tube between process i - 1 and i
+            if ((pids_len > 1) && (i > 0)) {
+                Close(old_tube[0]);
+                Close(old_tube[1]);
+            }
+        }
         // Parent
-		for (int i = 0; i < nb_commands; i++) {
-        	Waitpid(-1, NULL, 0);
-		}
+        int job_id = addjob(l->raw, pids, pids_len);
+        if (l->bg == 0)
+            setfg(job_id);
+        else
+            printf("[%d] %d\n", job_id, pids[0]);
+
+        // * Unblock SIGCHLD
+        Sigprocmask(SIG_SETMASK, &prev_one, NULL);
+
+        waitfgjob();
     }
 }

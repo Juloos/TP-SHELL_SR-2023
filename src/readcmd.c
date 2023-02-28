@@ -172,9 +172,12 @@ static void freecmd(struct cmdline *s) {
     if (s->in) free(s->in);
     if (s->out) free(s->out);
     if (s->seq) freeseq(s->seq);
+    if (s->raw) free(s->raw);
 }
 
 void freecmd2(struct cmdline *s) {
+    if (!s)
+        return;
     if (s->err) free(s->err);
     freecmd(s);
     free(s);
@@ -209,7 +212,6 @@ struct cmdline *readcmd(void) {
     seq_len = 0;
 
     words = split_in_words(line);
-    free(line);
 
     if (!s)
         static_cmdline = s = xmalloc(sizeof(struct cmdline));
@@ -220,6 +222,7 @@ struct cmdline *readcmd(void) {
     s->in = 0;
     s->out = 0;
     s->seq = 0;
+    s->raw = line;
 
     int k;
     size_t len;
@@ -337,6 +340,10 @@ struct cmdline *readcmd(void) {
     if (s->out) {
         free(s->out);
         s->out = 0;
+    }
+    if (s->raw) {
+        free(s->raw);
+        s->raw = 0;
     }
     return s;
 }

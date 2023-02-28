@@ -1,4 +1,4 @@
-.PHONY: all, clean
+.PHONY: all, clean, test
 
 # Disable implicit rules
 .SUFFIXES:
@@ -25,5 +25,8 @@ all: shell
 	$(CC) -o $@ $(LDFLAGS) $^ $(LIBS)
 
 clean:
-	rm -f shell *.o
+	rm -f shell *.o tests/*.log
 
+
+test: all
+	bash tests/run_tests.sh

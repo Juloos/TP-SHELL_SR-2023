@@ -139,9 +139,10 @@ static char **split_in_words(char *line) {
                         default:;
                     }
                 }
-                w = xmalloc((cur - start) * sizeof(char));
-                strncpy(w, start, cur - start - 1);
-                w[cur - start - 1] = 0;
+                cur--;
+                w = xmalloc((cur - start + 1) * sizeof(char));
+                strncpy(w, start, cur - start);
+                w[cur - start] = 0;
         }
         if (w) {
             tab = xrealloc(tab, (l + 1) * sizeof(char *));

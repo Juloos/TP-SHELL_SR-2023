@@ -45,6 +45,11 @@ int main(int argc, char *argv[]) {
         print = 0;
     }
 
+	// Disable the shell prints if stdin is not a terminal (aka is a file)
+	if (!isatty(0)) {
+		print = 0;
+	}
+
     Cmdline *l;
 
     sigset_t mask_one, prev_one;
@@ -148,7 +153,7 @@ int main(int argc, char *argv[]) {
 
                 // Output Redirect if last command
                 if ((l->out != NULL) && (i == pids_len - 1)) {
-                    int fd = Open(l->out, O_CREAT | O_WRONLY, 0);
+                    int fd = Open(l->out, O_CREAT | O_WRONLY, 0644);
                     Dup2(fd, 1);
                 }
 

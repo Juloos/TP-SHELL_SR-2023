@@ -15,9 +15,11 @@ int deletejobpid(pid_t pid);
 
 void freejobs(void);
 
+int killjob(int job_id, int signum);
+
 void killjobs(void);
 
-void setfg(int job_id);
+int setfg(int job_id);
 
 void waitfgjob(void);
 

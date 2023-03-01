@@ -45,10 +45,9 @@ int main(int argc, char *argv[]) {
         print = 0;
     }
 
-	// Disable the shell prints if stdin is not a terminal (aka is a file)
-	if (!isatty(0)) {
-		print = 0;
-	}
+    // Disable the shell prints if stdin is not a terminal (aka is a file)
+    if (!isatty(0))
+        print = 0;
 
     Cmdline *l;
 

@@ -15,8 +15,6 @@ int deletejobpid(pid_t pid);
 
 void freejobs(void);
 
-int killjob(int job_id, int signum);
-
 void killjobs(void);
 
 int setfg(int job_id);

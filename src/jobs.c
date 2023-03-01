@@ -31,7 +31,7 @@ typedef struct _joblist {
 static JobList *jobs;
 static Job *fg;
 static int nb_id_used = 0;
-static sigset_t mask_all, prev_all;  // * Used to block signals until ressource is available
+static sigset_t mask_all, prev_mask;  // Used to block signals until ressource is available
 
 
 JobList *createjoblist(Job *job) {
@@ -188,49 +188,49 @@ void initjobs() {
 }
 
 int addjob(char *cmd, pid_t *pids, size_t nb_pids) {
-    Sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
+    Sigprocmask(SIG_BLOCK, &mask_all, &prev_mask);
     int res = _addjob(cmd, pids, nb_pids);
-    Sigprocmask(SIG_SETMASK, &prev_all, NULL);
+    Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
     return res;
 }
 
 int pausejob(int job_id) {
-    Sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
+    Sigprocmask(SIG_BLOCK, &mask_all, &prev_mask);
     int res = _pausejob(job_id);
-    Sigprocmask(SIG_SETMASK, &prev_all, NULL);
+    Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
     return res;
 }
 
 int resumejob(int job_id) {
-    Sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
+    Sigprocmask(SIG_BLOCK, &mask_all, &prev_mask);
     int res = _resumejob(job_id);
-    Sigprocmask(SIG_SETMASK, &prev_all, NULL);
+    Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
     return res;
 }
 
 int deletejobpid(pid_t pid) {
-    Sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
+    Sigprocmask(SIG_BLOCK, &mask_all, &prev_mask);
     int res = _deletejobpid(pid);
-    Sigprocmask(SIG_SETMASK, &prev_all, NULL);
+    Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
     return res;
 }
 
 void freejobs() {
-    Sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
+    Sigprocmask(SIG_BLOCK, &mask_all, &prev_mask);
     _freejobs();
-    Sigprocmask(SIG_SETMASK, &prev_all, NULL);
+    Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
 }
 
 void killjobs() {
-    Sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
+    Sigprocmask(SIG_BLOCK, &mask_all, &prev_mask);
     _killjobs();
-    Sigprocmask(SIG_SETMASK, &prev_all, NULL);
+    Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
 }
 
 int setfg(int job_id) {
-    Sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
+    Sigprocmask(SIG_BLOCK, &mask_all, &prev_mask);
     int res = _setfg(job_id);
-    Sigprocmask(SIG_SETMASK, &prev_all, NULL);
+    Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
     return res;
 }
 

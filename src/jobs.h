@@ -7,9 +7,11 @@ void initjobs(void);
 
 int addjob(char *cmd, pid_t *pids, size_t nb_pids);
 
-int pausejob(int job_id);
+int stopjob(int job_id);
 
-int resumejob(int job_id);
+int contjob(int job_id);
+
+int termjob(int job_id);
 
 int deletejobpid(pid_t pid);
 
@@ -18,6 +20,8 @@ void freejobs(void);
 void killjobs(void);
 
 int setfg(int job_id);
+
+int getfg(void);
 
 void waitfgjob(void);
 

@@ -23,9 +23,23 @@
 #define RESET "\e[0m"
 
 
-static sigset_t mask_all, mask_one, prev_mask;
+static sigset_t mask_all, prev_mask;
 static int shellprint = 1;
 
+
+void handle_int(int sig) {
+    // If there is a foreground job, terminate it
+    int fg = getfg();
+    if (fg != -1)
+        termjob(fg);
+}
+
+void handle_tstp(int sig) {
+    // If there is a foreground job, stop it
+    int fg = getfg();
+    if (fg != -1)
+        stopjob(fg);
+}
 
 void handle_child(int sig) {
     int olderrno = errno;                                            // Save errno
@@ -57,7 +71,7 @@ void show_prompt() {
 
 void exec_cmd(Cmdline *l) {
     // Block SIGCHLD
-    Sigprocmask(SIG_BLOCK, &mask_one, &prev_mask);
+    Sigprocmask(SIG_BLOCK, &mask_all, &prev_mask);
 
     int pids_len = 1;
     while (l->seq[pids_len] != NULL)
@@ -108,7 +122,7 @@ void exec_cmd(Cmdline *l) {
             Setpgid(getpid(), getpid());
 
             // Unblock all signals
-            Sigprocmask(SIG_SETMASK, &mask_all, NULL);
+            Sigprocmask(SIG_UNBLOCK, &mask_all, NULL);
             // Make sure all signal handlers are SIG_DFL
             for (int sig = 1; sig < 32; sig++)  // 31 signals total
                 if (sig != SIGKILL && sig != SIGSTOP)
@@ -152,13 +166,14 @@ int main(int argc, char *argv[]) {
     if (!isatty(0))
         shellprint = 0;
 
-    // Init masks
+    // Init mask
     Sigfillset(&mask_all);
-    Sigemptyset(&mask_one);
-    Sigaddset(&mask_one, SIGCHLD);
 
+    // Init job list and signal handlers
     initjobs();
     Signal(SIGCHLD, handle_child);
+    Signal(SIGINT, handle_int);
+    Signal(SIGTSTP, handle_tstp);
 
     Cmdline *l;
     while (1) {

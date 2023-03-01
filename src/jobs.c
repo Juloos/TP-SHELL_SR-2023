@@ -11,8 +11,8 @@ typedef struct _job {
     char *cmd;         // Corresponding command line
     int status;        // Current status of the job, 0: Running, 1: Stopped, 2: Done
     time_t starttime;  // Timestamp of the start of the job
-    time_t pausetime;  // Timestamp of the last pause of the job
-    pid_t *pids;       // Array of pids, the pids of the processus executing the commands in the command line, -1 designate a terminated processus
+    time_t pausetime;  // Timestamp of the last pause of the job, or of its termination
+    pid_t *pids;       // Array of pids, the pids of the processes executing the commands in the command line, -1 designate a terminated processes
     size_t nb_pids;    // Number of pids in the array
 } Job;
 
@@ -30,9 +30,37 @@ typedef struct _joblist {
 
 static JobList *jobs;
 static Job *fg;
-static int nb_id_used = 0;
-static sigset_t mask_all, prev_mask;  // Used to block signals until ressource is available
+static sigset_t mask_all, prev_mask;  // Used to block signals until resource is available
 
+
+int getnewid() {
+    // Source : https://www.geeksforgeeks.org/find-the-smallest-positive-number-missing-from-an-unsorted-array/
+    // Complexity : O(n)
+
+    // n is the highest job id
+    int n = 1;
+    JobList *j;
+    for (j = jobs; j != NULL; j = j->next)
+        if (j->job->id > n)
+            n = j->job->id;
+
+    // To mark the occurrence of elements. 0 is "false" ans 1 is "true"
+    char present[n + 1];
+    for (int i = 0; i < n; i++)
+        present[i] = 0;
+
+    // Mark the occurrences
+    for (j = jobs; j != NULL; j = j->next)
+        present[j->job->id] = 1;
+
+    // Find the first element which didn't appear in the original array
+    for (int i = 1; i <= n; i++)
+        if (present[i] == 0)
+            return i;
+
+    // If the original array was of the type {1, 2, 3} in its sorted form
+    return n + 1;
+}
 
 JobList *createjoblist(Job *job) {
     JobList *j = (JobList *) malloc(sizeof(JobList));
@@ -43,7 +71,7 @@ JobList *createjoblist(Job *job) {
 
 Job *createjob(char *cmd, pid_t *pids, size_t nb_pids) {
     Job *job = (Job *) malloc(sizeof(Job));
-    job->id = ++nb_id_used;
+    job->id = getnewid();
     job->status = S_RUNNING;
     job->starttime = time(NULL);
     job->pausetime = job->starttime;
@@ -61,6 +89,24 @@ void freejob(Job *job) {
     free(job);
 }
 
+void removejob(int job_id) {
+    JobList *j = jobs;
+    JobList *prev = NULL;
+    while (j != NULL) {
+        if (j->job->id == job_id) {
+            if (prev == NULL)
+                jobs = j->next;
+            else
+                prev->next = j->next;
+            freejob(j->job);
+            free(j);
+            return;
+        }
+        prev = j;
+        j = j->next;
+    }
+}
+
 int _addjob(char *cmd, pid_t *pids, size_t nb_pids) {
     JobList *j = createjoblist(createjob(cmd, pids, nb_pids));
     j->next = jobs;
@@ -68,7 +114,7 @@ int _addjob(char *cmd, pid_t *pids, size_t nb_pids) {
     return j->job->id;
 }
 
-int _pausejob(int job_id) {
+int _stopjob(int job_id) {
     JobList *j = jobs;
     while (j != NULL) {
         if (j->job->id == job_id) {
@@ -86,7 +132,7 @@ int _pausejob(int job_id) {
     return 0;
 }
 
-int _resumejob(int job_id) {
+int _contjob(int job_id) {
     JobList *j = jobs;
     while (j != NULL) {
         if (j->job->id == job_id) {
@@ -104,9 +150,24 @@ int _resumejob(int job_id) {
     return 0;
 }
 
+int _termjob(int job_id) {
+    JobList *j = jobs;
+    while (j != NULL) {
+        if (j->job->id == job_id) {
+            if (j->job->status == S_DONE)
+                return 0;
+            for (int i = 0; i < j->job->nb_pids; i++)
+                if (j->job->pids[i] != P_TERMINATED)
+                    Kill(-j->job->pids[i], SIGTERM);
+            return 1;
+        }
+        j = j->next;
+    }
+    return 0;
+}
+
 int _deletejobpid(pid_t pid) {
     JobList *j = jobs;
-    JobList *prev = NULL;
     while (j != NULL) {
         int i;
         for (i = 0; i < j->job->nb_pids; i++) {
@@ -121,20 +182,19 @@ int _deletejobpid(pid_t pid) {
         i = 0;
         while (i < j->job->nb_pids && j->job->pids[i] == P_TERMINATED)
             i++;
-        if (i == j->job->nb_pids) {  // All processes of the command terminated
-            if (prev == NULL)
-                jobs = j->next;
-            else
-                prev->next = j->next;
-            if (fg == j->job)
+        if (i == j->job->nb_pids) {           // If all processes of the command have terminated
+            if (j->job->status == S_RUNNING)  // If the job was not already stopped
+                j->job->pausetime = time(NULL);
+            j->job->status = S_DONE;
+            if (j->job ==
+                fg) {  // If the job was in foreground, we can free it, otherwise keep it for later notification
+                removejob(j->job->id);
                 fg = NULL;
-            freejob(j->job);
-            free(j);
+            }
         }
         return 1;
 
         whilend:
-        prev = j;
         j = j->next;
     }
     return 0;
@@ -169,6 +229,8 @@ void _killjobs() {
 }
 
 int _setfg(int job_id) {
+    if (fg != NULL)
+        return 0;
     JobList *j = jobs;
     while (j != NULL) {
         if (j->job->id == job_id) {
@@ -178,6 +240,12 @@ int _setfg(int job_id) {
         j = j->next;
     }
     return 0;
+}
+
+int _getfg() {
+    if (fg == NULL)
+        return -1;
+    return fg->id;
 }
 
 
@@ -194,16 +262,23 @@ int addjob(char *cmd, pid_t *pids, size_t nb_pids) {
     return res;
 }
 
-int pausejob(int job_id) {
+int stopjob(int job_id) {
     Sigprocmask(SIG_BLOCK, &mask_all, &prev_mask);
-    int res = _pausejob(job_id);
+    int res = _stopjob(job_id);
     Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
     return res;
 }
 
-int resumejob(int job_id) {
+int contjob(int job_id) {
     Sigprocmask(SIG_BLOCK, &mask_all, &prev_mask);
-    int res = _resumejob(job_id);
+    int res = _contjob(job_id);
+    Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
+    return res;
+}
+
+int termjob(int job_id) {
+    Sigprocmask(SIG_BLOCK, &mask_all, &prev_mask);
+    int res = _termjob(job_id);
     Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
     return res;
 }
@@ -234,6 +309,14 @@ int setfg(int job_id) {
     return res;
 }
 
+int getfg() {
+    Sigprocmask(SIG_BLOCK, &mask_all, &prev_mask);
+    int res = _getfg();
+    Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
+    return res;
+}
+
 void waitfgjob() {
-    while (fg != NULL);
+    while (fg != NULL)
+        sleep(1);
 }

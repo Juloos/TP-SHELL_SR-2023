@@ -15,6 +15,10 @@ int termjob(int job_id);
 
 int deletejobpid(pid_t pid);
 
+int contjobpid(pid_t pid);
+
+int stopjobpid(pid_t pid);
+
 void freejobs(void);
 
 void killjobs(void);

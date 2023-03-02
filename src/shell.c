@@ -22,6 +22,9 @@
 #define WHITE "\e[1;37m"
 #define RESET "\e[0m"
 
+#define PIPE_READ 0
+#define PIPE_WRITE 1
+
 
 static sigset_t mask_all, prev_mask;
 static int shellprint = 1;
@@ -42,12 +45,18 @@ void handle_tstp(int sig) {
 }
 
 void handle_child(int sig) {
-    int olderrno = errno;                                            // Save errno
+    int olderrno = errno;                                                         // Save errno
     int status;
     pid_t pid;
-    while ((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0)    // Reaping all terminated children
-        deletejobpid(pid);                                           // Delete the child from the job list
-    errno = olderrno;                                                // Restore errno
+    while ((pid = waitpid(-1, &status, WNOHANG | WUNTRACED | WCONTINUED)) > 0) {  // Reaping all terminated children
+        if (WIFSTOPPED(status))
+            stopjobpid(pid);                                                      // If the child was stopped, stop the job
+        else if (WIFCONTINUED(status))
+            contjobpid(pid);                                                      // If the child was continued, continue the job
+        else
+            deletejobpid(pid);                                                    // Delete the child from the job list
+    }
+    errno = olderrno;                                                             // Restore errno
 }
 
 void show_prompt() {
@@ -81,8 +90,8 @@ void exec_cmd(Cmdline *l) {
 
     int pids[pids_len];
     for (int i = 0; i < pids_len; i++) {
-        old_tube[0] = new_tube[0];
-        old_tube[1] = new_tube[1];
+        old_tube[PIPE_READ] = new_tube[PIPE_READ];
+        old_tube[PIPE_WRITE] = new_tube[PIPE_WRITE];
 
         // Create nb_commands - 1 tubes
         if (i + 1 < pids_len)
@@ -99,14 +108,14 @@ void exec_cmd(Cmdline *l) {
 
             // Prepare to read if not first command
             if (i > 0) {
-                Close(old_tube[1]);
-                Dup2(old_tube[0], 0);
+                Close(old_tube[PIPE_WRITE]);
+                Dup2(old_tube[PIPE_READ], 0);
             }
 
             // Prepare to write if not last command
             if (i + 1 < pids_len) {
-                Close(new_tube[0]);
-                Dup2(new_tube[1], 1);
+                Close(new_tube[PIPE_READ]);
+                Dup2(new_tube[PIPE_WRITE], 1);
             }
 
             // Output Redirect if last command
@@ -118,8 +127,8 @@ void exec_cmd(Cmdline *l) {
             // No need to keep job list in child process, freeing memory
             freejobs();
 
-            // Make it a process group leader
-            Setpgid(getpid(), getpid());
+            // Make first process in command line the group leader of the brother processes of the command line
+            Setpgid(getpid(), pids[0]);
 
             // Unblock all signals
             Sigprocmask(SIG_UNBLOCK, &mask_all, NULL);
@@ -138,8 +147,8 @@ void exec_cmd(Cmdline *l) {
         // Parent
         // Close tube between process i - 1 and i
         if ((pids_len > 1) && (i > 0)) {
-            Close(old_tube[0]);
-            Close(old_tube[1]);
+            Close(old_tube[PIPE_READ]);
+            Close(old_tube[PIPE_WRITE]);
         }
     }
     // Parent

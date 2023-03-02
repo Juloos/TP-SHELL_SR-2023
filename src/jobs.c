@@ -22,8 +22,8 @@ typedef struct _joblist {
     Job *job;
 } JobList;
 
-
-#define P_TERMINATED (-1)
+#define P_ISTERMINATED(pid) (pid < 0)
+#define P_TERMINATION(pid) (P_ISTERMINATED(pid) ? pid : -pid)
 #define S_RUNNING 0
 #define S_STOPPED 1
 #define S_DONE 2
@@ -46,7 +46,7 @@ int getnewid() {
 
     // To mark the occurrence of elements. 0 is "false" ans 1 is "true"
     char present[n + 1];
-    for (int i = 0; i < n; i++)
+    for (int i = 0; i <= n; i++)
         present[i] = 0;
 
     // Mark the occurrences
@@ -120,11 +120,7 @@ int _stopjob(int job_id) {
         if (j->job->id == job_id) {
             if (j->job->status == S_STOPPED || j->job->status == S_DONE)
                 return 0;
-            for (int i = 0; i < j->job->nb_pids; i++)
-                if (j->job->pids[i] != P_TERMINATED)
-                    Kill(-j->job->pids[i], SIGTSTP);
-            j->job->status = S_STOPPED;
-            j->job->pausetime = time(NULL);
+            Kill(-j->job->pids[0], SIGTSTP);
             return 1;
         }
         j = j->next;
@@ -138,11 +134,7 @@ int _contjob(int job_id) {
         if (j->job->id == job_id) {
             if (j->job->status == S_RUNNING || j->job->status == S_DONE)
                 return 0;
-            for (int i = 0; i < j->job->nb_pids; i++)
-                if (j->job->pids[i] != P_TERMINATED)
-                    Kill(-j->job->pids[i], SIGCONT);
-            j->job->status = S_RUNNING;
-            j->job->starttime += time(NULL) - j->job->pausetime;
+            Kill(-j->job->pids[0], SIGCONT);
             return 1;
         }
         j = j->next;
@@ -156,9 +148,7 @@ int _termjob(int job_id) {
         if (j->job->id == job_id) {
             if (j->job->status == S_DONE)
                 return 0;
-            for (int i = 0; i < j->job->nb_pids; i++)
-                if (j->job->pids[i] != P_TERMINATED)
-                    Kill(-j->job->pids[i], SIGTERM);
+            Kill(-j->job->pids[0], SIGTERM);
             return 1;
         }
         j = j->next;
@@ -172,7 +162,7 @@ int _deletejobpid(pid_t pid) {
         int i;
         for (i = 0; i < j->job->nb_pids; i++) {
             if (j->job->pids[i] == pid) {
-                j->job->pids[i] = P_TERMINATED;
+                j->job->pids[i] = P_TERMINATION(j->job->pids[i]);
                 break;
             }
         }
@@ -180,14 +170,13 @@ int _deletejobpid(pid_t pid) {
             goto whilend;
 
         i = 0;
-        while (i < j->job->nb_pids && j->job->pids[i] == P_TERMINATED)
+        while (i < j->job->nb_pids && P_ISTERMINATED(j->job->pids[i]))
             i++;
         if (i == j->job->nb_pids) {           // If all processes of the command have terminated
             if (j->job->status == S_RUNNING)  // If the job was not already stopped
                 j->job->pausetime = time(NULL);
             j->job->status = S_DONE;
-            if (j->job ==
-                fg) {  // If the job was in foreground, we can free it, otherwise keep it for later notification
+            if (j->job == fg) {  // If the job was in foreground, we can free it, otherwise keep it for later notification
                 removejob(j->job->id);
                 fg = NULL;
             }
@@ -195,6 +184,32 @@ int _deletejobpid(pid_t pid) {
         return 1;
 
         whilend:
+        j = j->next;
+    }
+    return 0;
+}
+
+int _contjobpid(pid_t pid) {
+    JobList *j = jobs;
+    while (j != NULL) {
+        if (j->job->pids[0] == (pid)) {
+            j->job->status = S_RUNNING;
+            j->job->starttime += time(NULL) - j->job->pausetime;
+            return 1;
+        }
+        j = j->next;
+    }
+    return 0;
+}
+
+int _stopjobpid(pid_t pid) {
+    JobList *j = jobs;
+    while (j != NULL) {
+        if (j->job->pids[0] == pid) {
+            j->job->status = S_STOPPED;
+            j->job->pausetime = time(NULL);
+            return 1;
+        }
         j = j->next;
     }
     return 0;
@@ -215,12 +230,10 @@ void _killjobs() {
     JobList *j = jobs;
     JobList *prev = NULL;
     while (j != NULL) {
-        for (int i = 0; i < j->job->nb_pids; i++) {
-            if (j->job->pids[i] == P_TERMINATED)
-                continue;
-            Kill(-j->job->pids[i], SIGKILL);
-            Waitpid(j->job->pids[i], NULL, 0);
-        }
+        Kill(-j->job->pids[0], SIGKILL);
+        for (int i = 0; i < j->job->nb_pids; i++)
+            if (!P_ISTERMINATED(j->job->pids[i]))
+                Waitpid(j->job->pids[i], NULL, 0);
         freejob(j->job);
         prev = j;
         j = j->next;
@@ -286,6 +299,20 @@ int termjob(int job_id) {
 int deletejobpid(pid_t pid) {
     Sigprocmask(SIG_BLOCK, &mask_all, &prev_mask);
     int res = _deletejobpid(pid);
+    Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
+    return res;
+}
+
+int contjobpid(pid_t pid) {
+    Sigprocmask(SIG_BLOCK, &mask_all, &prev_mask);
+    int res = _contjobpid(pid);
+    Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
+    return res;
+}
+
+int stopjobpid(pid_t pid) {
+    Sigprocmask(SIG_BLOCK, &mask_all, &prev_mask);
+    int res = _stopjobpid(pid);
     Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
     return res;
 }

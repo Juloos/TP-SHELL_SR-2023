@@ -1,0 +1,2 @@
+ls | grep ".md" | wc -l
+ls -l src/ | grep ".c" | awk '{print $5 " " $3 " " $9}' | sort -n | rev

@@ -22,8 +22,10 @@ typedef struct _joblist {
     Job *job;
 } JobList;
 
+#define P_PID(pid) (pid < 0 ? -pid : pid)
+#define P_PGID(pid) (pid < 0 ? pid : -pid)
 #define P_ISTERMINATED(pid) (pid < 0)
-#define P_GROUP(pid) (P_ISTERMINATED(pid) ? pid : -pid)
+#define P_TERMINATE(pid) P_PGID(pid)
 #define S_RUNNING 0
 #define S_STOPPED 1
 #define S_DONE 2
@@ -121,7 +123,7 @@ static Job *pidfindjob(pid_t pid) {
     JobList *jl = jobs;
     while (jl != NULL) {
         for (size_t i = 0; i < jl->job->nb_pids; i++)
-            if (-P_GROUP(jl->job->pids[i]) == pid)
+            if (P_PID(jl->job->pids[i]) == pid)
                 return jl->job;
         jl = jl->next;
     }
@@ -132,7 +134,7 @@ static Job *pgidfindjob(pid_t pgid) {
     // Hypothesis : pgid is the pid of the first process of the job
     JobList *jl = jobs;
     while (jl != NULL) {
-        if (-P_GROUP(jl->job->pids[0]) == pgid)
+        if (P_PID(jl->job->pids[0]) == pgid)
             return jl->job;
         jl = jl->next;
     }
@@ -153,7 +155,7 @@ static int _stopjob(int job_id) {
     else if (job->status == S_STOPPED || job->status == S_DONE)
         return 2;  // Job already stopped
 
-    Kill(P_GROUP(job->pids[0]), SIGTSTP);
+    Kill(P_PGID(job->pids[0]), SIGTSTP);
     return 0;
 }
 
@@ -164,7 +166,7 @@ static int _contjob(int job_id) {
     if (job->status == S_RUNNING || job->status == S_DONE)
         return 2;  // Job already running
 
-    Kill(P_GROUP(job->pids[0]), SIGCONT);
+    Kill(P_PGID(job->pids[0]), SIGCONT);
     return 0;
 }
 
@@ -175,7 +177,7 @@ static int _termjob(int job_id) {
     if (job->status == S_DONE)
         return 2;  // Job already terminated
 
-    Kill(P_GROUP(job->pids[0]), SIGTERM);
+    Kill(P_PGID(job->pids[0]), SIGTERM);
     return 0;
 }
 
@@ -188,7 +190,7 @@ static int _deletejobpid(pid_t pid) {
     int nb_term = 0;
     for (int i = 0; i < job->nb_pids; i++) {
         if (job->pids[i] == pid)
-            job->pids[i] = P_GROUP(job->pids[i]);
+            job->pids[i] = P_TERMINATE(job->pids[i]);
         if (P_ISTERMINATED(job->pids[i]))
             nb_term++;
     }
@@ -244,7 +246,7 @@ static void _killjobs() {
     JobList *jl = jobs;
     while (jl != NULL) {
         if (jl->job->status != S_DONE) {
-            Kill(-jl->job->pids[0], SIGKILL);
+            Kill(P_PGID(jl->job->pids[0]), SIGKILL);
             for (int i = 0; i < jl->job->nb_pids; i++)
                 if (!P_ISTERMINATED(jl->job->pids[i]))
                     Waitpid(jl->job->pids[i], NULL, 0);
@@ -305,7 +307,7 @@ static void _printjobs() {
             default:
                 status = "Unknown";
         }
-        printf("[%d]  %-9s  %s\n", jl->job->id, status, jl->job->cmd);
+        printf("[%d] %d  %-9s  %s\n", jl->job->id, P_PID(jl->job->pids[0]), status, jl->job->cmd);
         jl = jl->next;
     }
 

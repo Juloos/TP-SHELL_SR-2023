@@ -88,7 +88,7 @@ void exec_cmd(Cmdline *l) {
 
     int old_tube[2], new_tube[2];
 
-    int pids[pids_len];
+    pid_t pids[pids_len];
     for (int i = 0; i < pids_len; i++) {
         old_tube[PIPE_READ] = new_tube[PIPE_READ];
         old_tube[PIPE_WRITE] = new_tube[PIPE_WRITE];
@@ -127,9 +127,6 @@ void exec_cmd(Cmdline *l) {
             // No need to keep job list in child process, freeing memory
             freejobs();
 
-            // Make first process in command line the group leader of the brother processes of the command line
-            Setpgid(getpid(), pids[0]);
-
             // Unblock all signals
             Sigprocmask(SIG_UNBLOCK, &mask_all, NULL);
             // Make sure all signal handlers are SIG_DFL
@@ -145,6 +142,10 @@ void exec_cmd(Cmdline *l) {
             }
         }
         // Parent
+
+        // Make first process in command line the group leader of the brother processes of the command line
+        Setpgid(pids[i], pids[0]);
+
         // Close tube between process i - 1 and i
         if ((pids_len > 1) && (i > 0)) {
             Close(old_tube[PIPE_READ]);

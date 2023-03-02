@@ -27,8 +27,12 @@ int setfg(int job_id);
 
 int getfg(void);
 
-void waitfgjob(void);
+int getlastjob(void);
+
+char *getjobcmd(int job_id);
 
 void printjobs(void);
+
+void waitfgjob(void);
 
 #endif //TP_SHELL_SR_2023_JOBS_H

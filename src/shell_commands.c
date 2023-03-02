@@ -6,6 +6,37 @@
 #include "shell_commands.h"
 #include "jobs.h"
 
+void cmd_fg(int argc, char *args[]) {
+    if (argc > 2)
+        fprintf(stderr, "%s: too many arguments\n", args[0]);
+    else {
+        // Default job id is the one of the last background job created
+        int job_id = getlastjob();
+        if (argc == 2)
+            job_id = atoi(args[1]);
+        setfg(job_id);
+        waitfgjob();
+    }
+}
+
+void cmd_bg(int argc, char *args[]) {
+    if (argc > 2)
+        fprintf(stderr, "%s: too many arguments\n", args[0]);
+    else {
+        int job_id = getlastjob();
+        if (argc == 2)
+            job_id = atoi(args[1]);
+        contjob(job_id);
+    }
+}
+
+void cmd_jobs(int argc, char *args[]) {
+    if (argc > 1)
+        fprintf(stderr, "%s: too many arguments\n", args[0]);
+    else
+        printjobs();
+}
+
 void cmd_cd(int argc, char *args[]) {
     char *pwd;
 
@@ -34,7 +65,7 @@ int check_internal_commands(Cmdline *l, int cmd_index) {
     while (cmd[argc] != NULL)
         argc++;
 
-    // Command is "exit" or "quit"
+    // Command is "exit" or "quit" (not in a function because of freecmd2(l))
     if (strcmp(cmd[0], "exit") == 0 || strcmp(cmd[0], "quit") == 0) {
         if (argc > 2)
             fprintf(stderr, "%s: too many arguments\n", cmd[0]);
@@ -54,33 +85,22 @@ int check_internal_commands(Cmdline *l, int cmd_index) {
         cmd_cd(argc, cmd);
         return 1;
     }
- 
-    // Ignore comments
-    if (cmd[0][0] == '#') {
-        return 1;
-    }
 
+    // Command is "jobs"
     if (strcmp(cmd[0], "jobs") == 0) {
-        printjobs();
+        cmd_jobs(argc, cmd);
         return 1;
     }
 
+    // Command is "fg"
     if (strcmp(cmd[0], "fg") == 0) {
-        int id = 1;
-        if (cmd[1] != NULL) {
-            id = atoi(cmd[1]);
-        }
-        setfg(id);
-        waitfgjob();
+        cmd_fg(argc, cmd);
         return 1;
     }
 
+    // Command is "bg"
     if (strcmp(cmd[0], "bg") == 0) {
-        int id = 1;
-        if (cmd[1] != NULL) {
-            id = atoi(cmd[1]);
-        }
-        contjob(id);
+        cmd_bg(argc, cmd);
         return 1;
     }
 

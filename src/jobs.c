@@ -33,16 +33,16 @@ static Job *fg;
 static sigset_t mask_all, prev_mask;  // Used to block signals until resource is available
 
 
-int getnewid() {
+static int getnewid() {
     // Source : https://www.geeksforgeeks.org/find-the-smallest-positive-number-missing-from-an-unsorted-array/
     // Complexity : O(n)
 
     // n is the highest job id
     int n = 1;
-    JobList *j;
-    for (j = jobs; j != NULL; j = j->next)
-        if (j->job->id > n)
-            n = j->job->id;
+    JobList *jl;
+    for (jl = jobs; jl != NULL; jl = jl->next)
+        if (jl->job->id > n)
+            n = jl->job->id;
 
     // To mark the occurrence of elements. 0 is "false" ans 1 is "true"
     char present[n + 1];
@@ -50,8 +50,8 @@ int getnewid() {
         present[i] = 0;
 
     // Mark the occurrences
-    for (j = jobs; j != NULL; j = j->next)
-        present[j->job->id] = 1;
+    for (jl = jobs; jl != NULL; jl = jl->next)
+        present[jl->job->id] = 1;
 
     // Find the first element which didn't appear in the original array
     for (int i = 1; i <= n; i++)
@@ -62,14 +62,14 @@ int getnewid() {
     return n + 1;
 }
 
-JobList *createjoblist(Job *job) {
-    JobList *j = (JobList *) malloc(sizeof(JobList));
-    j->next = NULL;
-    j->job = job;
-    return j;
+static JobList *createjoblist(Job *job) {
+    JobList *jl = (JobList *) malloc(sizeof(JobList));
+    jl->next = NULL;
+    jl->job = job;
+    return jl;
 }
 
-Job *createjob(char *cmd, pid_t *pids, size_t nb_pids) {
+static Job *createjob(char *cmd, pid_t *pids, size_t nb_pids) {
     Job *job = (Job *) malloc(sizeof(Job));
     job->id = getnewid();
     job->status = S_RUNNING;
@@ -83,203 +83,246 @@ Job *createjob(char *cmd, pid_t *pids, size_t nb_pids) {
     return job;
 }
 
-void freejob(Job *job) {
+static void freejob(Job *job) {
     free(job->cmd);
     free(job->pids);
     free(job);
 }
 
-void removejob(int job_id) {
-    JobList *j = jobs;
+static void removejob(int job_id) {
+    JobList *jl = jobs;
     JobList *prev = NULL;
-    while (j != NULL) {
-        if (j->job->id == job_id) {
+    while (jl != NULL) {
+        if (jl->job->id == job_id) {
             if (prev == NULL)
-                jobs = j->next;
+                jobs = jl->next;
             else
-                prev->next = j->next;
-            freejob(j->job);
-            free(j);
+                prev->next = jl->next;
+            freejob(jl->job);
+            free(jl);
             return;
         }
-        prev = j;
-        j = j->next;
+        prev = jl;
+        jl = jl->next;
     }
 }
 
-int _addjob(char *cmd, pid_t *pids, size_t nb_pids) {
-    JobList *j = createjoblist(createjob(cmd, pids, nb_pids));
-    j->next = jobs;
-    jobs = j;
-    return j->job->id;
+static Job *findjob(int job_id) {
+    JobList *jl = jobs;
+    while (jl != NULL) {
+        if (jl->job->id == job_id)
+            return jl->job;
+        jl = jl->next;
+    }
+    return NULL;
 }
 
-int _stopjob(int job_id) {
-    JobList *j = jobs;
-    while (j != NULL) {
-        if (j->job->id == job_id) {
-            if (j->job->status == S_STOPPED || j->job->status == S_DONE)
-                return 0;
-            Kill(P_GROUP(j->job->pids[0]), SIGTSTP);
-            return 1;
+static Job *pidfindjob(pid_t pid) {
+    JobList *jl = jobs;
+    while (jl != NULL) {
+        for (size_t i = 0; i < jl->job->nb_pids; i++)
+            if (jl->job->pids[i] == pid)
+                return jl->job;
+        jl = jl->next;
+    }
+    return NULL;
+}
+
+static Job *pgidfindjob(pid_t pgid) {
+    // Hypothesis : pgid is the pid of the first process of the job
+    JobList *jl = jobs;
+    while (jl != NULL) {
+        if (jl->job->pids[0] == pgid)
+            return jl->job;
+        jl = jl->next;
+    }
+    return NULL;
+}
+
+static int _addjob(char *cmd, pid_t *pids, size_t nb_pids) {
+    JobList *jl = createjoblist(createjob(cmd, pids, nb_pids));
+    jl->next = jobs;
+    jobs = jl;
+    return jl->job->id;
+}
+
+static int _stopjob(int job_id) {
+    Job *job = findjob(job_id);
+    if (job == NULL)
+        return 1;  // Job not found
+    else if (job->status == S_STOPPED || job->status == S_DONE)
+        return 2;  // Job already stopped
+
+    Kill(P_GROUP(job->pids[0]), SIGTSTP);
+    return 0;
+}
+
+static int _contjob(int job_id) {
+    Job *job = findjob(job_id);
+    if (job == NULL)
+        return 1;  // Job not found
+    if (job->status == S_RUNNING || job->status == S_DONE)
+        return 2;  // Job already running
+
+    Kill(P_GROUP(job->pids[0]), SIGCONT);
+    return 0;
+}
+
+static int _termjob(int job_id) {
+    Job *job = findjob(job_id);
+    if (job == NULL)
+        return 1;  // Job not found
+    if (job->status == S_DONE)
+        return 2;  // Job already terminated
+
+    Kill(P_GROUP(job->pids[0]), SIGTERM);
+    return 0;
+}
+
+static int _deletejobpid(pid_t pid) {
+    Job *job = pidfindjob(pid);
+    if (job == NULL)
+        return 1;  // Job not found
+
+    int i = 0;
+    while (i < job->nb_pids && P_ISTERMINATED(job->pids[i]))
+        i++;
+    if (i == job->nb_pids) {           // If all processes of the command have terminated
+        if (job->status == S_RUNNING)  // If the job was not already stopped
+            job->pausetime = time(NULL);
+        job->status = S_DONE;
+        if (job == fg) {  // If the job was in foreground, we can free it, otherwise keep it for later notification
+            removejob(job->id);
+            fg = NULL;
         }
-        j = j->next;
     }
     return 0;
 }
 
-int _contjob(int job_id) {
-    JobList *j = jobs;
-    while (j != NULL) {
-        if (j->job->id == job_id) {
-            if (j->job->status == S_RUNNING || j->job->status == S_DONE)
-                return 0;
-            Kill(P_GROUP(j->job->pids[0]), SIGCONT);
-            return 1;
-        }
-        j = j->next;
-    }
+static int _contjobpid(pid_t pid) {
+    // Must be the pid of the leader process in order to consider it "running" again
+    Job *job = pgidfindjob(pid);
+    if (job == NULL)
+        return 1;  // Job not found
+
+    job->status = S_RUNNING;
+    job->starttime += time(NULL) - job->pausetime;
     return 0;
 }
 
-int _termjob(int job_id) {
-    JobList *j = jobs;
-    while (j != NULL) {
-        if (j->job->id == job_id) {
-            if (j->job->status == S_DONE)
-                return 0;
-            Kill(P_GROUP(j->job->pids[0]), SIGTERM);
-            return 1;
-        }
-        j = j->next;
-    }
+static int _stopjobpid(pid_t pid) {
+    // Must be the pid of the leader process in order to consider it "stopped"
+    Job *job = pgidfindjob(pid);
+    if (job == NULL)
+        return 1;  // Job not found
+
+    if (job == fg)
+        fg = NULL;
+    job->status = S_STOPPED;
+    job->pausetime = time(NULL);
     return 0;
 }
 
-int _deletejobpid(pid_t pid) {
-    JobList *j = jobs;
-    while (j != NULL) {
-        int i;
-        for (i = 0; i < j->job->nb_pids; i++) {
-            if (j->job->pids[i] == pid) {
-                j->job->pids[i] = P_GROUP(j->job->pids[i]);
-                break;
-            }
-        }
-        if (i == j->job->nb_pids)
-            goto whilend;
-
-        i = 0;
-        while (i < j->job->nb_pids && P_ISTERMINATED(j->job->pids[i]))
-            i++;
-        if (i == j->job->nb_pids) {           // If all processes of the command have terminated
-            if (j->job->status == S_RUNNING)  // If the job was not already stopped
-                j->job->pausetime = time(NULL);
-            j->job->status = S_DONE;
-            if (j->job == fg) {  // If the job was in foreground, we can free it, otherwise keep it for later notification
-                removejob(j->job->id);
-                fg = NULL;
-            }
-        }
-        return 1;
-
-        whilend:
-        j = j->next;
-    }
-    return 0;
-}
-
-int _contjobpid(pid_t pid) {
-    JobList *j = jobs;
-    while (j != NULL) {
-        if (j->job->pids[0] == pid) {
-            j->job->status = S_RUNNING;
-            j->job->starttime += time(NULL) - j->job->pausetime;
-            return 1;
-        }
-        j = j->next;
-    }
-    return 0;
-}
-
-int _stopjobpid(pid_t pid) {
-    JobList *j = jobs;
-    while (j != NULL) {
-        if (j->job->pids[0] == pid) {
-            if (j->job == fg)
-                fg = NULL;
-            j->job->status = S_STOPPED;
-            j->job->pausetime = time(NULL);
-            return 1;
-        }
-        j = j->next;
-    }
-    return 0;
-}
-
-void _freejobs() {
-    JobList *j = jobs;
+static void _freejobs() {
+    JobList *jl = jobs;
     JobList *prev = NULL;
-    while (j != NULL) {
-        freejob(j->job);
-        prev = j;
-        j = j->next;
+    while (jl != NULL) {
+        freejob(jl->job);
+        prev = jl;
+        jl = jl->next;
         free(prev);
     }
 }
 
-void _killjobs() {
-    JobList *j = jobs;
-    while (j != NULL) {
-        if (j->job->status != S_DONE) {
-            Kill(-j->job->pids[0], SIGKILL);
-            for (int i = 0; i < j->job->nb_pids; i++)
-                if (!P_ISTERMINATED(j->job->pids[i]))
-                    Waitpid(j->job->pids[i], NULL, 0);
+static void _killjobs() {
+    JobList *jl = jobs;
+    while (jl != NULL) {
+        if (jl->job->status != S_DONE) {
+            Kill(-jl->job->pids[0], SIGKILL);
+            for (int i = 0; i < jl->job->nb_pids; i++)
+                if (!P_ISTERMINATED(jl->job->pids[i]))
+                    Waitpid(jl->job->pids[i], NULL, 0);
         }
-        j = j->next;
+        jl = jl->next;
     }
     freejobs();
 }
 
-int _setfg(int job_id) {
+static int _setfg(int job_id) {
     if (fg != NULL)
-        return 0;
-    JobList *j = jobs;
-    while (j != NULL) {
-        if (j->job->id == job_id) {
-            fg = j->job;
-            return 1;
-        }
-        j = j->next;
-    }
+        return 2;  // A job is already in foreground
+
+    Job *job = findjob(job_id);
+    if (job == NULL)
+        return 1;  // Job not found
+
+    fg = job;
     return 0;
 }
 
-int _getfg() {
+static int _getfg() {
     if (fg == NULL)
         return -1;
     return fg->id;
 }
 
-void printjobs() {
-    JobList* current_job = jobs;
-    while (current_job != NULL) {
-        printf("[%d] + ", current_job->job->id);
-        char* status;
-        switch (current_job->job->status) {
-        case 0:
-            status = "running";
-            break;
-        case 1:
-            status = "suspended";
-            break;
-        default:
-            status = "";
+static int _getlastjob() {
+    if (jobs == NULL)
+        return -1;
+    return jobs->job->id;
+}
+
+static char *_getjobcmd(int job_id) {
+    JobList *jl = jobs;
+    while (jl != NULL) {
+        if (jl->job->id == job_id)
+            return jl->job->cmd;
+        jl = jl->next;
+    }
+    return NULL;
+}
+
+static void _printjobs() {
+    char *status;
+    JobList *jl = jobs;
+    while (jl != NULL) {
+        switch (jl->job->status) {
+            case S_RUNNING:
+                status = "Running";
+                break;
+            case S_STOPPED:
+                status = "Suspended";
+                break;
+            case S_DONE:
+                status = "Done";
+                break;
+            default:
+                status = "Unknown";
         }
-        printf("%-10s", status);
-        printf("%s\n", current_job->job->cmd);
-        current_job = current_job->next;
+        printf("[%d]  %-9s  %s\n", jl->job->id, status, jl->job->cmd);
+        jl = jl->next;
+    }
+
+    // Free the jobs that are "Done", now that they have notified the user of their termination
+    jl = jobs;
+    JobList *prev = NULL;
+    while (jl != NULL) {
+        if (jl->job->status != S_DONE) {
+            prev = jl;
+            jl = jl->next;
+            continue;
+        }
+        if (prev == NULL) {  // First element is "Done"
+            jobs = jl->next;
+            freejob(jl->job);
+            free(jl);
+            jl = jobs;
+        } else {
+            prev->next = jl->next;
+            freejob(jl->job);
+            free(jl);
+            jl = prev->next;
+        }
     }
 }
 
@@ -363,6 +406,26 @@ int getfg() {
     int res = _getfg();
     Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
     return res;
+}
+
+int getlastjob() {
+    Sigprocmask(SIG_BLOCK, &mask_all, &prev_mask);
+    int res = _getlastjob();
+    Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
+    return res;
+}
+
+char *getjobcmd(int job_id) {
+    Sigprocmask(SIG_BLOCK, &mask_all, &prev_mask);
+    char *res = _getjobcmd(job_id);
+    Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
+    return res;
+}
+
+void printjobs() {
+    Sigprocmask(SIG_BLOCK, &mask_all, &prev_mask);
+    _printjobs();
+    Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
 }
 
 void waitfgjob() {

@@ -104,5 +104,10 @@ int check_internal_commands(Cmdline *l, int cmd_index) {
         return 1;
     }
 
+    // Ignore comments (for tests purposes)
+    if (cmd[0][0] == '#') {
+        return 1;
+    }
+
     return 0;
 }

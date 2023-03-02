@@ -12,7 +12,7 @@ typedef struct _job {
     int status;        // Current status of the job, 0: Running, 1: Stopped, 2: Done
     time_t starttime;  // Timestamp of the start of the job
     time_t pausetime;  // Timestamp of the last pause of the job, or of its termination
-    pid_t *pids;       // Array of pids, the pids of the processes executing the commands in the command line, -1 designate a terminated processes
+    pid_t *pids;       // Array of pids, the pids of the processes executing the commands in the command line, a negative pid designate a terminated processes
     size_t nb_pids;    // Number of pids in the array
 } Job;
 
@@ -121,7 +121,7 @@ static Job *pidfindjob(pid_t pid) {
     JobList *jl = jobs;
     while (jl != NULL) {
         for (size_t i = 0; i < jl->job->nb_pids; i++)
-            if (jl->job->pids[i] == pid)
+            if (-P_GROUP(jl->job->pids[i]) == pid)
                 return jl->job;
         jl = jl->next;
     }
@@ -132,7 +132,7 @@ static Job *pgidfindjob(pid_t pgid) {
     // Hypothesis : pgid is the pid of the first process of the job
     JobList *jl = jobs;
     while (jl != NULL) {
-        if (jl->job->pids[0] == pgid)
+        if (-P_GROUP(jl->job->pids[0]) == pgid)
             return jl->job;
         jl = jl->next;
     }
@@ -184,10 +184,16 @@ static int _deletejobpid(pid_t pid) {
     if (job == NULL)
         return 1;  // Job not found
 
-    int i = 0;
-    while (i < job->nb_pids && P_ISTERMINATED(job->pids[i]))
-        i++;
-    if (i == job->nb_pids) {           // If all processes of the command have terminated
+    // Counting the number of terminated processes and marking the terminated process as well
+    int nb_term = 0;
+    for (int i = 0; i < job->nb_pids; i++) {
+        if (job->pids[i] == pid)
+            job->pids[i] = P_GROUP(job->pids[i]);
+        if (P_ISTERMINATED(job->pids[i]))
+            nb_term++;
+    }
+
+    if (nb_term == job->nb_pids) {     // If all processes of the command have terminated
         if (job->status == S_RUNNING)  // If the job was not already stopped
             job->pausetime = time(NULL);
         job->status = S_DONE;

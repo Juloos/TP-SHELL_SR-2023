@@ -29,4 +29,6 @@ int getfg(void);
 
 void waitfgjob(void);
 
+void printjobs(void);
+
 #endif //TP_SHELL_SR_2023_JOBS_H

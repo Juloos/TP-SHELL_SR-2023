@@ -60,5 +60,29 @@ int check_internal_commands(Cmdline *l, int cmd_index) {
         return 1;
     }
 
+    if (strcmp(cmd[0], "jobs") == 0) {
+        printjobs();
+        return 1;
+    }
+
+    if (strcmp(cmd[0], "fg") == 0) {
+        int id = 1;
+        if (cmd[1] != NULL) {
+            id = atoi(cmd[1]);
+        }
+        setfg(id);
+        waitfgjob();
+        return 1;
+    }
+
+    if (strcmp(cmd[0], "bg") == 0) {
+        int id = 1;
+        if (cmd[1] != NULL) {
+            id = atoi(cmd[1]);
+        }
+        contjobpid(id);
+        return 1;
+    }
+
     return 0;
 }

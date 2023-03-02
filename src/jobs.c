@@ -261,6 +261,27 @@ int _getfg() {
     return fg->id;
 }
 
+void printjobs() {
+    JobList* current_job = jobs;
+    while (current_job != NULL) {
+        printf("[%d] + ", current_job->job->id);
+        char* status;
+        switch (current_job->job->status) {
+        case 0:
+            status = "running";
+            break;
+        case 1:
+            status = "suspended";
+            break;
+        default:
+            status = "";
+        }
+        printf("%-10s", status);
+        printf("%s\n", current_job->job->cmd);
+        current_job = current_job->next;
+    }
+}
+
 
 void initjobs() {
     Sigfillset(&mask_all);

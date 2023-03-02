@@ -80,7 +80,7 @@ int check_internal_commands(Cmdline *l, int cmd_index) {
         if (cmd[1] != NULL) {
             id = atoi(cmd[1]);
         }
-        contjobpid(id);
+        contjob(id);
         return 1;
     }
 

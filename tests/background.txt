@@ -1,0 +1,3 @@
+./tests/long_command.sh &
+ps | wc -l
+./tests/long_command.sh

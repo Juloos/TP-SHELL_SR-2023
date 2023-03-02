@@ -5,4 +5,4 @@ ls
 echo
 ls
 echo
-ps -l
+ps -l | wc -l

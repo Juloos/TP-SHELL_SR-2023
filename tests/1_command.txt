@@ -1,0 +1,7 @@
+#
+# 1_command.det.txt - Check for many simples commands
+#
+
+ls
+echo this should print
+# echo this should not print

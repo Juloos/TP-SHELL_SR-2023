@@ -4,27 +4,28 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NOCOLOR='\033[0m'
 
-for derterministic_test in tests/*.det.txt
+for test in tests/*.txt
 do
-    sh $derterministic_test | sort > default
-    ./shell $derterministic_test | sort > output
-    if cmp -s default output;
+    ./sdriver.pl -t $test -s /bin/sh | sort > tests/default
+    ./sdriver.pl -t $test -s ./shell | sort > tests/output
+    if diff tests/default tests/output > tests/tmp;
     then
-        echo -e ${GREEN} test $derterministic_test passed ${NOCOLOR}
+        echo -e ${GREEN}passed $test ${NOCOLOR}
     else
-        echo -e ${RED} test $derterministic_test failed ${NOCOLOR}
+        mv tests/tmp $test.log
+        echo -e ${RED}failed $test ${NOCOLOR}
     fi
 done
 
 for valgrind_test in tests/*.txt
 do
-    valgrind -q --leak-check=full --show-leak-kinds=all ./shell $valgrind_test 2> output 1> /dev/null
-    if [ -s output ]; then
-        echo -e ${RED} valgrind $valgrind_test failed ${NOCOLOR}
+    ./sdriver.pl -t $valgrind_test -s /usr/bin/valgrind  -a "-q --leak-check=full --show-leak-kinds=all ./shell" 2> tests/output 1> /dev/null
+    if [ -s tests/output ]; then
+        echo -e ${RED}failed valgrind $valgrind_test ${NOCOLOR}
         mv output $valgrind_test.log
     else
-        echo -e ${GREEN} valgrind $valgrind_test passed ${NOCOLOR}
+        echo -e ${GREEN}passed valgrind $valgrind_test ${NOCOLOR}
     fi
 done
 
-rm -f default output
+rm -f tests/default tests/output tests/tmp

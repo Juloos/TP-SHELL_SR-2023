@@ -192,7 +192,7 @@ int _deletejobpid(pid_t pid) {
 int _contjobpid(pid_t pid) {
     JobList *j = jobs;
     while (j != NULL) {
-        if (j->job->pids[0] == (pid)) {
+        if (j->job->pids[0] == pid) {
             j->job->status = S_RUNNING;
             j->job->starttime += time(NULL) - j->job->pausetime;
             return 1;
@@ -206,6 +206,8 @@ int _stopjobpid(pid_t pid) {
     JobList *j = jobs;
     while (j != NULL) {
         if (j->job->pids[0] == pid) {
+            if (j->job == fg)
+                fg = NULL;
             j->job->status = S_STOPPED;
             j->job->pausetime = time(NULL);
             return 1;

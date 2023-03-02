@@ -134,7 +134,11 @@ void exec_cmd(Cmdline *l) {
                 if (sig != SIGKILL && sig != SIGSTOP)
                     Signal(sig, SIG_DFL);
 
-            // Execute the command with check for failure
+            // Exit with success if it is an internal command (thus executed), errors will be printed in standard error
+            if (check_internal_commands(l, i) == 1)
+                exit(EXIT_SUCCESS);
+
+            // Execute the external command with check for failure
             if (execvp(l->seq[i][0], l->seq[i]) == -1) {
                 perror(l->seq[i][0]);
                 freecmd2(l);
@@ -210,11 +214,11 @@ int main(int argc, char *argv[]) {
         if (!l->seq[0])
             continue;
 
-        // Execute internal command and continue if it is one
-        if (check_internal_commands(l, 0) == 1)
+        // If internal command (with no pipe), execute it directly and continue
+        if (!l->seq[1] && check_internal_commands(l, 0) == 1)
             continue;
 
-        // Otherwise execute external command
+        // Otherwise execute command with child processes
         exec_cmd(l);
 
         waitfgjob();

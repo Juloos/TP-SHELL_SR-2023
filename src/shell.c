@@ -88,7 +88,7 @@ void exec_cmd(Cmdline *l) {
 
     int old_tube[2], new_tube[2];
 
-    int pids[pids_len];
+    pid_t pids[pids_len];
     for (int i = 0; i < pids_len; i++) {
         old_tube[PIPE_READ] = new_tube[PIPE_READ];
         old_tube[PIPE_WRITE] = new_tube[PIPE_WRITE];
@@ -127,9 +127,6 @@ void exec_cmd(Cmdline *l) {
             // No need to keep job list in child process, freeing memory
             freejobs();
 
-            // Make first process in command line the group leader of the brother processes of the command line
-            Setpgid(getpid(), pids[0]);
-
             // Unblock all signals
             Sigprocmask(SIG_UNBLOCK, &mask_all, NULL);
             // Make sure all signal handlers are SIG_DFL
@@ -137,7 +134,11 @@ void exec_cmd(Cmdline *l) {
                 if (sig != SIGKILL && sig != SIGSTOP)
                     Signal(sig, SIG_DFL);
 
-            // Execute the command with check for failure
+            // Exit with success if it is an internal command (thus executed), errors will be printed in standard error
+            if (check_internal_commands(l, i) == 1)
+                exit(EXIT_SUCCESS);
+
+            // Execute the external command with check for failure
             if (execvp(l->seq[i][0], l->seq[i]) == -1) {
                 perror(l->seq[i][0]);
                 freecmd2(l);
@@ -145,6 +146,10 @@ void exec_cmd(Cmdline *l) {
             }
         }
         // Parent
+
+        // Make first process in command line the group leader of the brother processes of the command line
+        Setpgid(pids[i], pids[0]);
+
         // Close tube between process i - 1 and i
         if ((pids_len > 1) && (i > 0)) {
             Close(old_tube[PIPE_READ]);
@@ -209,11 +214,11 @@ int main(int argc, char *argv[]) {
         if (!l->seq[0])
             continue;
 
-        // Execute internal command and continue if it is one
-        if (check_internal_commands(l, 0) == 1)
+        // If internal command (with no pipe), execute it directly and continue
+        if (!l->seq[1] && check_internal_commands(l, 0) == 1)
             continue;
 
-        // Otherwise execute external command
+        // Otherwise execute command with child processes
         exec_cmd(l);
 
         waitfgjob();

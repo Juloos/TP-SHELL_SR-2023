@@ -23,7 +23,7 @@ typedef struct _joblist {
 } JobList;
 
 #define P_ISTERMINATED(pid) (pid < 0)
-#define P_TERMINATION(pid) (P_ISTERMINATED(pid) ? pid : -pid)
+#define P_GROUP(pid) (P_ISTERMINATED(pid) ? pid : -pid)
 #define S_RUNNING 0
 #define S_STOPPED 1
 #define S_DONE 2
@@ -120,7 +120,7 @@ int _stopjob(int job_id) {
         if (j->job->id == job_id) {
             if (j->job->status == S_STOPPED || j->job->status == S_DONE)
                 return 0;
-            Kill(-j->job->pids[0], SIGTSTP);
+            Kill(P_GROUP(j->job->pids[0]), SIGTSTP);
             return 1;
         }
         j = j->next;
@@ -134,7 +134,7 @@ int _contjob(int job_id) {
         if (j->job->id == job_id) {
             if (j->job->status == S_RUNNING || j->job->status == S_DONE)
                 return 0;
-            Kill(-j->job->pids[0], SIGCONT);
+            Kill(P_GROUP(j->job->pids[0]), SIGCONT);
             return 1;
         }
         j = j->next;
@@ -148,7 +148,7 @@ int _termjob(int job_id) {
         if (j->job->id == job_id) {
             if (j->job->status == S_DONE)
                 return 0;
-            Kill(-j->job->pids[0], SIGTERM);
+            Kill(P_GROUP(j->job->pids[0]), SIGTERM);
             return 1;
         }
         j = j->next;
@@ -162,7 +162,7 @@ int _deletejobpid(pid_t pid) {
         int i;
         for (i = 0; i < j->job->nb_pids; i++) {
             if (j->job->pids[i] == pid) {
-                j->job->pids[i] = P_TERMINATION(j->job->pids[i]);
+                j->job->pids[i] = P_GROUP(j->job->pids[i]);
                 break;
             }
         }
@@ -192,7 +192,7 @@ int _deletejobpid(pid_t pid) {
 int _contjobpid(pid_t pid) {
     JobList *j = jobs;
     while (j != NULL) {
-        if (j->job->pids[0] == (pid)) {
+        if (j->job->pids[0] == pid) {
             j->job->status = S_RUNNING;
             j->job->starttime += time(NULL) - j->job->pausetime;
             return 1;
@@ -206,6 +206,8 @@ int _stopjobpid(pid_t pid) {
     JobList *j = jobs;
     while (j != NULL) {
         if (j->job->pids[0] == pid) {
+            if (j->job == fg)
+                fg = NULL;
             j->job->status = S_STOPPED;
             j->job->pausetime = time(NULL);
             return 1;
@@ -228,17 +230,16 @@ void _freejobs() {
 
 void _killjobs() {
     JobList *j = jobs;
-    JobList *prev = NULL;
     while (j != NULL) {
-        Kill(-j->job->pids[0], SIGKILL);
-        for (int i = 0; i < j->job->nb_pids; i++)
-            if (!P_ISTERMINATED(j->job->pids[i]))
-                Waitpid(j->job->pids[i], NULL, 0);
-        freejob(j->job);
-        prev = j;
+        if (j->job->status != S_DONE) {
+            Kill(-j->job->pids[0], SIGKILL);
+            for (int i = 0; i < j->job->nb_pids; i++)
+                if (!P_ISTERMINATED(j->job->pids[i]))
+                    Waitpid(j->job->pids[i], NULL, 0);
+        }
         j = j->next;
-        free(prev);
     }
+    freejobs();
 }
 
 int _setfg(int job_id) {

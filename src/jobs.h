@@ -17,7 +17,7 @@ void freejobs(void);
 
 void killjobs(void);
 
-void setfg(int job_id);
+int setfg(int job_id);
 
 void waitfgjob(void);
 

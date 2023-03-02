@@ -22,7 +22,7 @@ do
     ./sdriver.pl -t $valgrind_test -s /usr/bin/valgrind  -a "-q --leak-check=full --show-leak-kinds=all ./shell" 2> tests/output 1> /dev/null
     if [ -s tests/output ]; then
         echo -e ${RED}failed valgrind $valgrind_test ${NOCOLOR}
-        mv output $valgrind_test.log
+        mv tests/output $valgrind_test.log
     else
         echo -e ${GREEN}passed valgrind $valgrind_test ${NOCOLOR}
     fi

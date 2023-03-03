@@ -68,7 +68,7 @@ int main() {
 
 			// Output Redirect
 			if (cmd->out != NULL) {
-				int fd = Open(cmd->out, O_CREAT | O_WRONLY, 0);
+				int fd = Open(cmd->out, O_CREAT | O_WRONLY, 0644);
 				Dup2(fd, 1);
 			}
 

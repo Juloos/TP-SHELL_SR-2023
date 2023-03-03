@@ -250,11 +250,12 @@ static int _termjob(int job_id) {
     return 0;
 }
 
-/* _deletejobpid - Delete a pid from a Job (switch it to a "terminated" state), not Signal safe version
+/* _deletejobpid - Delete a pid from a Job (put it to "Done" state), not Signal safe version
  * Arguments :
  *  - pid - The pid to delete
  * Return value : 0 if the pid was switched to the "terminated" state
  *                1 if the pid was not found
+ * Notes : Effectively puts the Job in "Done" state iff all pids of the Job have been treated as "Terminated" beforehand
  */
 static int _deletejobpid(pid_t pid) {
     Job *job = pidfindjob(pid);
@@ -282,7 +283,7 @@ static int _deletejobpid(pid_t pid) {
     return 0;
 }
 
-/* _contjobpid - Continue a Job, not Signal safe version
+/* _contjobpid - Put back a Job in "Running" state, not Signal safe version
  * Arguments :
  *  - pid - The pid of the Job to continue, only effective if the pid is the pid of the leader process
  * Return value : 0 if the Job was continued
@@ -299,7 +300,7 @@ static int _contjobpid(pid_t pid) {
     return 0;
 }
 
-/* _stopjobpid - Stop a Job, not Signal safe version
+/* _stopjobpid - Put a Job in "Stopped" state, not Signal safe version
  * Arguments :
  *  - pid - The pid of the Job to stop, only effective if the pid is the pid of the leader process
  * Return value : 0 if the Job was stopped
@@ -434,29 +435,36 @@ static char *_getjobcmd(int job_id) {
     return NULL;
 }
 
-/* _printjobs - Print all the Jobs (like the "jobs" command), not Signal safe version
+/* _printjobs - Print all the Jobs (nearly as the "jobs" command), not Signal safe version
  *              Also frees the Jobs that are "Done"
  * Arguments : None
  * Return value : None
  */
 static void _printjobs() {
     char *status;
+    char strtime[9];
+    time_t exectime;
     JobList *jl = jobs;
     while (jl != NULL) {
         switch (jl->job->status) {
             case S_RUNNING:
                 status = "Running";
+                exectime = time(NULL) - jl->job->starttime;
                 break;
             case S_STOPPED:
                 status = "Suspended";
+                exectime = jl->job->pausetime - jl->job->starttime;
                 break;
             case S_DONE:
                 status = "Done";
+                exectime = jl->job->pausetime - jl->job->starttime;
                 break;
             default:
                 status = "Unknown";
+                exectime = 0;
         }
-        printf("[%d] %d  %-9s  %s\n", jl->job->id, P_PID(jl->job->pids[0]), status, jl->job->cmd);
+        sprintf(strtime, "%02ld:%02ld:%02ld", exectime / 3600, (exectime % 3600) / 60, exectime % 60); // HH:MM:SS
+        printf("[%d] %d  %-9s  %s  %s\n", jl->job->id, P_PID(jl->job->pids[0]), status, strtime, jl->job->cmd);
         jl = jl->next;
     }
 
@@ -485,6 +493,8 @@ static void _printjobs() {
 
 
 // Public functions : see jobs.h for documentation
+// For the most part "Signal safe", that is : Signal handlers are mutually exclusive towards the global variables of
+// this file.
 
 void initjobs() {
     Sigfillset(&mask_all);

@@ -12,14 +12,8 @@
 #include "csapp.h"
 
 // La vie est plus belle avec des couleurs
-#define BLACK "\e[1;30m"
-#define RED "\e[1;31m"
 #define GREEN "\e[1;32m"
-#define YELLOW "\e[1;33m"
 #define BLUE "\e[1;34m"
-#define MAGENTA "\e[1;35m"
-#define CYAN "\e[1;36m"
-#define WHITE "\e[1;37m"
 #define RESET "\e[0m"
 
 #define PIPE_READ 0
@@ -30,6 +24,7 @@ static sigset_t mask_all, prev_mask;
 static int shellprint = 1;
 
 
+// handle_int - SIGINT handler
 void handle_int(int sig) {
     // If there is a foreground job, terminate it
     int fg = getfg();
@@ -37,12 +32,14 @@ void handle_int(int sig) {
         termjob(fg);
 }
 
+// handle_tstp - SIGTSTP handler
 void handle_tstp(int sig) {
     // If there is a foreground job, stop it
     int fg = getfg();
     if (fg == -1)
         return;
 
+    // Use return value of stopjob() to check for errors
     switch (stopjob(fg)) {
         case 2:
             fprintf(stderr, "stop: Job already stopped\n");
@@ -50,7 +47,7 @@ void handle_tstp(int sig) {
         case 1:
             fprintf(stderr, "stop: No such job\n");
             break;
-        case 0:
+        case 0:  // Everything went well
         default:
             if (shellprint)
                 printf("\n[%d] %d  Suspended  %s\n", fg, getjobpgid(fg), getjobcmd(fg));
@@ -58,21 +55,27 @@ void handle_tstp(int sig) {
     }
 }
 
+// handle_child - SIGCHLD handler
 void handle_child(int sig) {
-    int olderrno = errno;                                                         // Save errno
+    int olderrno = errno;               // Save errno
     int status;
     pid_t pid;
-    while ((pid = waitpid(-1, &status, WNOHANG | WUNTRACED | WCONTINUED)) > 0) {  // Reaping all terminated children
+    // Reaping all terminated children, but managing Stopped and Continued children as well
+    while ((pid = waitpid(-1, &status, WNOHANG | WUNTRACED | WCONTINUED)) > 0) {
         if (WIFSTOPPED(status))
-            stopjobpid(pid);                                                      // If the child was stopped, stop the job
+            stopjobpid(pid);            // If the child was stopped, put the job in "Stopped" status
         else if (WIFCONTINUED(status))
-            contjobpid(pid);                                                      // If the child was continued, continue the job
+            contjobpid(pid);            // If the child was continued, put the job in "Running" status
         else
-            deletejobpid(pid);                                                    // Delete the child from the job list
+            deletejobpid(pid);          // Delete the child from the job list
     }
-    errno = olderrno;                                                             // Restore errno
+    errno = olderrno;                   // Restore errno
 }
 
+/* show_prompt - Prints the command prompt in standard output, with nice colors and stuff :)
+ * Arguments : None
+ * Return value : None
+ */
 void show_prompt() {
     char *home = getenv("HOME");
     char hostname[256];                                 // 255 is the max length of a hostname
@@ -92,6 +95,12 @@ void show_prompt() {
     free(pwd);                                          //  -|
 }
 
+/* exec_cmd() - Fork into child processes that will execute the command line,
+ *              with or without I/O redirection, and with or without piped processes
+ * Arguments :
+ *  - l - A pointer to the Cmdline struct that represents the scanned command line to execute
+ * Return value : None
+ */
 void exec_cmd(Cmdline *l) {
     // Block SIGCHLD
     Sigprocmask(SIG_BLOCK, &mask_all, &prev_mask);
@@ -228,7 +237,7 @@ int main(int argc, char *argv[]) {
         if (!l->seq[0])
             continue;
 
-        // If internal command (with no pipe), execute it directly and continue
+        // If internal command with no pipe, execute it directly and continue
         if (!l->seq[1] && check_internal_commands(l, 0) == 1)
             continue;
 

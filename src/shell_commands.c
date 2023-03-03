@@ -6,6 +6,15 @@
 #include "shell_commands.h"
 #include "jobs.h"
 
+/* cmd_stop - Stop a job
+ * Arguments :
+ *  - argc - The number of arguments
+ *  - args - The array of arguments
+ * Return value : None
+ * Notes : If no argument is given, the last background job created is selected,
+ *         If one argument is given, it must be a job id (preceded by a '%') or a pid select the job
+ *         If more than one argument is given, an error is printed
+ */
 void cmd_stop(int argc, char *args[]) {
     if (argc > 2)
         fprintf(stderr, "%s: too many arguments\n", args[0]);
@@ -48,6 +57,15 @@ void cmd_stop(int argc, char *args[]) {
     }
 }
 
+/* cmd_fg - Put a job in foreground
+ * Arguments :
+ *  - argc - The number of arguments
+ *  - args - The array of arguments
+ * Return value : None
+ * Notes : If no argument is given, the last background job created is selected,
+ *         If one argument is given, it must be a job id (preceded by a '%') or a pid to select the job
+ *         If more than one argument is given, an error is printed
+ */
 void cmd_fg(int argc, char *args[]) {
     if (argc > 2)
         fprintf(stderr, "%s: too many arguments\n", args[0]);
@@ -94,6 +112,15 @@ void cmd_fg(int argc, char *args[]) {
     }
 }
 
+/* cmd_bg - Put a job in background and resume it
+ * Arguments :
+ *  - argc - The number of arguments
+ *  - args - The array of arguments
+ * Return value : None
+ * Notes : If no argument is given, the last background job created is selected,
+ *         If one argument is given, it must be a job id (preceded by a '%') or a pid select the job
+ *         If more than one argument is given, an error is printed
+ */
 void cmd_bg(int argc, char *args[]) {
     if (argc > 2)
         fprintf(stderr, "%s: too many arguments\n", args[0]);
@@ -135,6 +162,13 @@ void cmd_bg(int argc, char *args[]) {
     }
 }
 
+/* cmd_jobs - Print the list of jobs
+ * Arguments :
+ *  - argc - The number of arguments
+ *  - args - The array of arguments
+ * Return value : None
+ * Notes : If more than one argument is given, an error is printed
+ */
 void cmd_jobs(int argc, char *args[]) {
     if (argc > 1)
         fprintf(stderr, "%s: too many arguments\n", args[0]);
@@ -142,6 +176,15 @@ void cmd_jobs(int argc, char *args[]) {
         printjobs();
 }
 
+/* cmd_cd - Change the directory
+ * Arguments :
+ *  - argc - The number of arguments
+ *  - args - The array of arguments
+ * Return value : None
+ * Notes : If no argument is given, the home directory is used
+ *         If one argument is given, it will try to go to the given destination and change the PWD env variable
+ *         If more than one argument is given, an error is printed
+ */
 void cmd_cd(int argc, char *args[]) {
     char *pwd;
 
@@ -163,6 +206,13 @@ void cmd_cd(int argc, char *args[]) {
     free(pwd);
 }
 
+/* check_internal_commands - Check if the command is an internal command and execute it if it is
+ * Arguments :
+ *  - l - The whole command line (Cmdline structure)
+ *  - cmd_index - The index of the command in the command line
+ * Return value : 1 if the command is an internal command, 0 otherwise
+ * Notes : If the command is "exit" or "quit", it may not return any value and exit the shell with the given exit code
+ */
 int check_internal_commands(Cmdline *l, int cmd_index) {
     char **cmd = l->seq[cmd_index];
 

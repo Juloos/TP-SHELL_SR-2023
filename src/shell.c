@@ -56,13 +56,14 @@ int main() {
         // Execute internal command if any
         check_internal_commands(cmd);
 
-		int tube[2];
-		pipe(tube);
-
 		int nb_commands = 0;
 		while (cmd->seq[nb_commands] != NULL) {
 			nb_commands++;
 		}
+
+        int tube[2];
+        if (nb_commands > 1)
+		    pipe(tube);
 		
         int pid[nb_commands];
 		for (int i = 0; i < nb_commands; i++) {
@@ -77,7 +78,7 @@ int main() {
 
 				// Output Redirect if last command
 				if ((cmd->out != NULL) && (i == nb_commands - 1)) {
-					int fd = Open(cmd->out, O_CREAT | O_WRONLY, 0);
+					int fd = Open(cmd->out, O_CREAT | O_WRONLY, 0644);
 					Dup2(fd, 1);
 				}
 				
@@ -101,8 +102,10 @@ int main() {
 			}
 		}
         // Parent
-		Close(tube[0]);
-		Close(tube[1]);
+        if (nb_commands > 1){
+            Close(tube[0]);
+            Close(tube[1]);
+        }
 		for (int i = 0; i < nb_commands; i++) {
         	Waitpid(pid[i], NULL, 0);
 		}

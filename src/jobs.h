@@ -30,6 +30,10 @@ int getfg(void);
 
 int getlastjob(void);
 
+int getjob(pid_t pid);
+
+pid_t getjobpgid(int job_id);
+
 char *getjobcmd(int job_id);
 
 void printjobs(void);

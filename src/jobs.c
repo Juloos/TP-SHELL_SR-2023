@@ -280,6 +280,20 @@ static int _getlastjob() {
     return jobs->job->id;
 }
 
+static int _getjob(pid_t pid) {
+    Job *job = pidfindjob(pid);
+    if (job == NULL)
+        return -1;
+    return job->id;
+}
+
+static pid_t _getjobpgid(int job_id) {
+    Job *job = findjob(job_id);
+    if (job == NULL)
+        return -1;
+    return P_PID(job->pids[0]);
+}
+
 static char *_getjobcmd(int job_id) {
     JobList *jl = jobs;
     while (jl != NULL) {
@@ -419,6 +433,20 @@ int getfg() {
 int getlastjob() {
     Sigprocmask(SIG_BLOCK, &mask_all, &prev_mask);
     int res = _getlastjob();
+    Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
+    return res;
+}
+
+int getjob(pid_t pid) {
+    Sigprocmask(SIG_BLOCK, &mask_all, &prev_mask);
+    int res = _getjob(pid);
+    Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
+    return res;
+}
+
+pid_t getjobpgid(int job_id) {
+    Sigprocmask(SIG_BLOCK, &mask_all, &prev_mask);
+    int res = _getjobpgid(job_id);
     Sigprocmask(SIG_SETMASK, &prev_mask, NULL);
     return res;
 }

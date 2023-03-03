@@ -52,7 +52,8 @@ void handle_tstp(int sig) {
             break;
         case 0:
         default:
-            printf("\n[%d] %d  Suspended  %s\n", fg, getjobpgid(fg), getjobcmd(fg));
+            if (shellprint)
+                printf("\n[%d] %d  Suspended  %s\n", fg, getjobpgid(fg), getjobcmd(fg));
             break;
     }
 }

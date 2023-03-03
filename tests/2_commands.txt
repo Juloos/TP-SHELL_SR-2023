@@ -1,2 +1,5 @@
+#
+# Tester des commandes avec un seul pipe
+#
 ls | grep ".md"
 ls | wc -l

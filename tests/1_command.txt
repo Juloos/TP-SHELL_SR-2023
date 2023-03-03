@@ -1,7 +1,6 @@
 #
-# 1_command.det.txt - Check for many simples commands
+# Tester la gestion de plusieurs commandes simples
 #
-
 ls
 echo this should print
-# echo this should not print
+test

@@ -1,0 +1,5 @@
+#
+# Tester la gestion du SIGINT (Ctrl-c)
+#
+./tests/long_command.sh
+INT

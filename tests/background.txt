@@ -1,3 +1,6 @@
+#
+# Tester la gestion des commandes en background
+#
 ./tests/long_command.sh &
 ps | wc -l
 ./tests/long_command.sh

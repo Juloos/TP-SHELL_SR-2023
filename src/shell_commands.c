@@ -6,15 +6,90 @@
 #include "shell_commands.h"
 #include "jobs.h"
 
-void cmd_fg(int argc, char *args[]) {
+void cmd_stop(int argc, char *args[]) {
     if (argc > 2)
         fprintf(stderr, "%s: too many arguments\n", args[0]);
     else {
         // Default job id is the one of the last background job created
         int job_id = getlastjob();
-        if (argc == 2)
-            job_id = atoi(args[1]);
-        setfg(job_id);
+        pid_t pid = -1;
+        if (argc == 2) {
+            if (args[1][0] == '%') {
+                // If the argument is not just "%", and is a positive integer
+                if (strlen(args[1]) > 1 && '0' <= args[1][1] && args[1][1] <= '9')
+                    job_id = atoi(args[1] + 1);
+                else
+                    fprintf(stderr, "%s: invalid job id\n", args[0]);
+            } else if ('0' <= args[1][0] && args[1][0] <= '9') // Otherwise it must be a positive integer
+                pid = atoi(args[1]);
+            else
+                fprintf(stderr, "%s: invalid pid\n", args[0]);
+        }
+        if (pid != -1)
+            job_id = getjob(pid);
+
+        int err = 1;
+        // If the job exists, stop it
+        if (job_id != -1)
+            err = stopjob(job_id);
+
+        switch (err) {
+            case 2:
+                fprintf(stderr, "%s: Job already stopped\n", args[0]);
+                break;
+            case 1:
+                fprintf(stderr, "%s: No such job\n", args[0]);
+                break;
+            case 0:
+            default:
+                printf("[%d] %d  Suspended  %s\n", job_id, getjobpgid(job_id), getjobcmd(job_id));
+                break;
+        }
+    }
+}
+
+void cmd_fg(int argc, char *args[]) {
+    if (argc > 2)
+        fprintf(stderr, "%s: too many arguments\n", args[0]);
+    else {
+        int job_id = getlastjob();
+        pid_t pid = -1;
+        if (argc == 2) {
+            if (args[1][0] == '%') {
+                // If the argument is not just "%", and is a positive integer
+                if (strlen(args[1]) > 1 && '0' <= args[1][1] && args[1][1] <= '9')
+                    job_id = atoi(args[1] + 1);
+                else
+                    fprintf(stderr, "%s: invalid job id\n", args[0]);
+            } else if ('0' <= args[1][0] && args[1][0] <= '9') // Otherwise it must be a positive integer
+                pid = atoi(args[1]);
+            else
+                fprintf(stderr, "%s: invalid pid\n", args[0]);
+        }
+        if (pid != -1)
+            job_id = getjob(pid);
+
+        int err = 1;
+        // If the job exists, set it as the foreground job and continue it
+        if (job_id != -1) {
+            contjob(job_id);
+            err = setfg(job_id);
+        }
+
+
+        switch (err) {
+            case 2:  // Practically impossible
+                fprintf(stderr, "%s: Job already in foreground\n", args[0]);
+                break;
+            case 1:
+                fprintf(stderr, "%s: No such job\n", args[0]);
+                break;
+            case 0:
+            default:
+                printf("%s\n", getjobcmd(job_id));
+                break;
+        }
+
         waitfgjob();
     }
 }
@@ -24,9 +99,39 @@ void cmd_bg(int argc, char *args[]) {
         fprintf(stderr, "%s: too many arguments\n", args[0]);
     else {
         int job_id = getlastjob();
-        if (argc == 2)
-            job_id = atoi(args[1]);
-        contjob(job_id);
+        pid_t pid = -1;
+        if (argc == 2) {
+            if (args[1][0] == '%') {
+                // If the argument is not just "%", and is a positive integer
+                if (strlen(args[1]) > 1 && '0' <= args[1][1] && args[1][1] <= '9')
+                    job_id = atoi(args[1] + 1);
+                else
+                    fprintf(stderr, "%s: invalid job id\n", args[0]);
+            } else if ('0' <= args[1][0] && args[1][0] <= '9') // Otherwise it must be a positive integer
+                pid = atoi(args[1]);
+            else
+                fprintf(stderr, "%s: invalid pid\n", args[0]);
+        }
+        if (pid != -1)
+            job_id = getjob(pid);
+
+        int err = 1;
+        // If the job exists, continue it
+        if (job_id != -1)
+            err = contjob(job_id);
+
+        switch (err) {
+            case 2:
+                fprintf(stderr, "%s: Job already in background\n", args[0]);
+                break;
+            case 1:
+                fprintf(stderr, "%s: No such job\n", args[0]);
+                break;
+            case 0:
+            default:
+                printf("[%d] %d  Running    %s\n", job_id, getjobpgid(job_id), getjobcmd(job_id));
+                break;
+        }
     }
 }
 
@@ -101,6 +206,12 @@ int check_internal_commands(Cmdline *l, int cmd_index) {
     // Command is "bg"
     if (strcmp(cmd[0], "bg") == 0) {
         cmd_bg(argc, cmd);
+        return 1;
+    }
+
+    // Command is "stop"
+    if (strcmp(cmd[0], "stop") == 0) {
+        cmd_stop(argc, cmd);
         return 1;
     }
 

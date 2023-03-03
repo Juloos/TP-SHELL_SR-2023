@@ -40,8 +40,21 @@ void handle_int(int sig) {
 void handle_tstp(int sig) {
     // If there is a foreground job, stop it
     int fg = getfg();
-    if (fg != -1)
-        stopjob(fg);
+    if (fg == -1)
+        return;
+
+    switch (stopjob(fg)) {
+        case 2:
+            fprintf(stderr, "stop: Job already stopped\n");
+            break;
+        case 1:
+            fprintf(stderr, "stop: No such job\n");
+            break;
+        case 0:
+        default:
+            printf("\n[%d] %d  Suspended  %s\n", fg, getjobpgid(fg), getjobcmd(fg));
+            break;
+    }
 }
 
 void handle_child(int sig) {

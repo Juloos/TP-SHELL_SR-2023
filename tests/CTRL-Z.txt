@@ -1,0 +1,6 @@
+#
+# Tester la gestion du Ctrl-z
+#
+yes
+TSTP
+exit

@@ -1,5 +1,5 @@
 #
-# test01.txt - Tester la commande quit
+# Tester la commande quit
 #
 exit
 WAIT

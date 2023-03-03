@@ -1,5 +1,5 @@
 #
-# test06.txt - Tester la gestion des zombies avec des commandes en background et le Shell qui se termine
+# Tester la gestion des zombies avec des commandes en background et le Shell qui se termine
 #
 ls &
 echo &

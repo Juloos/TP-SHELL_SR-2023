@@ -23,10 +23,10 @@ typedef struct _joblist {
     Job *job;
 } JobList;
 
-#define P_PID(pid) (pid < 0 ? -pid : pid)
-#define P_PGID(pid) (pid < 0 ? pid : -pid)
-#define P_ISTERMINATED(pid) (pid < 0)
-#define P_TERMINATE(pid) P_PGID(pid)
+#define P_PID(pid) (pid < 0 ? -pid : pid)   // Return the pid of a pid (the positive counterpart) to make sure it is positive
+#define P_PGID(pid) (pid < 0 ? pid : -pid)  // Returns the pgid of a pid (the negative counterpart)
+#define P_ISTERMINATED(pid) (pid < 0)       // Tells whether a pid is terminated or not
+#define P_TERMINATE(pid) P_PGID(pid)        // Returns the "Terminated" pid of a pid (that is just the negative counterpart)
 #define S_RUNNING 0
 #define S_STOPPED 1
 #define S_DONE 2

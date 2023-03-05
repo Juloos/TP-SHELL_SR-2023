@@ -1,6 +1,6 @@
 #
 # Tester la gestion du Ctrl-z
 #
-yes
+./tests/long_command.sh
 TSTP
 exit
